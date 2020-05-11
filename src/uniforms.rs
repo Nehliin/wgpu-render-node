@@ -16,7 +16,7 @@ struct BindingInfo {
 
 pub struct UniformBindGroup {
     buffers: SmallVec<[(TypeId, wgpu::Buffer); UNIFORM_STACK_LIMIT]>,
-    bind_group: wgpu::BindGroup,
+    bind_group: Option<wgpu::BindGroup>,
     bind_group_layout: wgpu::BindGroupLayout,
 }
 
@@ -30,7 +30,10 @@ impl UniformBindGroup {
     }
 
     pub(crate) fn get_bind_group(&self) -> &wgpu::BindGroup {
-        &self.bind_group
+        &self
+            .bind_group
+            .as_ref()
+            .expect("This should always be set in construction")
     }
 
     //TODO: a general Trait instead?
@@ -68,20 +71,21 @@ impl UniformBindGroupBuilder {
         }
     }
 
-    pub fn add_binding<T: Raw + 'static>(&mut self, visibility: wgpu::ShaderStage) {
+    pub fn add_binding<T: Raw + 'static>(mut self, visibility: wgpu::ShaderStage) -> Self {
         if let Some((id, _)) = self
             .builder_data
             .iter()
             .find(|(id, _)| id == &TypeId::of::<T>())
         {
             println!("{:?}, already added as a binding", id);
-            return;
+            return self;
         }
         let binding_info = BindingInfo {
             size: std::mem::size_of::<T>(),
             visibility,
         };
         self.builder_data.push((TypeId::of::<T>(), binding_info));
+        self
     }
 
     pub fn build(self, device: &wgpu::Device) -> UniformBindGroup {
@@ -89,24 +93,14 @@ impl UniformBindGroupBuilder {
             SmallVec::default();
         let mut buffers: SmallVec<[(TypeId, wgpu::Buffer); UNIFORM_STACK_LIMIT]> =
             SmallVec::default();
-        let mut bindings: SmallVec<[wgpu::Binding; UNIFORM_STACK_LIMIT]> = SmallVec::default();
-
-        for (i, (id, info)) in self.builder_data.into_iter().enumerate() {
+        for (i, (id, info)) in self.builder_data.iter().enumerate() {
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(&format!("UniformBindingBuffer: {}", i)),
                 size: info.size as u64,
                 usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             });
 
-            buffers.push((id, buffer));
-            let buffer = &buffers[buffers.len() - 1].1;
-            bindings.push(wgpu::Binding {
-                binding: i as u32,
-                resource: wgpu::BindingResource::Buffer {
-                    buffer,
-                    range: 0..info.size as wgpu::BufferAddress,
-                },
-            });
+            buffers.push((*id, buffer));
             layout_entries.push(wgpu::BindGroupLayoutEntry {
                 binding: i as u32,
                 visibility: info.visibility,
@@ -114,62 +108,70 @@ impl UniformBindGroupBuilder {
             })
         }
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             bindings: &layout_entries,
             label: Some("UniformBindGroup Layout"),
         });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            bindings: &bindings,
-            label: Some("UniformBindGroup"),
-        });
-
-        UniformBindGroup {
+        let mut uniform_bind_group = UniformBindGroup {
             buffers,
-            bind_group,
-            bind_group_layout,
+            bind_group: None,
+            bind_group_layout: layout,
+        };
+        {
+            let mut bindings: SmallVec<[wgpu::Binding; UNIFORM_STACK_LIMIT]> = SmallVec::default();
+            self.builder_data
+                .iter()
+                .enumerate()
+                .zip(uniform_bind_group.buffers.iter())
+                .for_each(|((i, (_, info)), (_, buffer))| {
+                    bindings.push(wgpu::Binding {
+                        binding: i as u32,
+                        resource: wgpu::BindingResource::Buffer {
+                            buffer: &buffer,
+                            range: 0..info.size as wgpu::BufferAddress,
+                        },
+                    });
+                });
+
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &uniform_bind_group.bind_group_layout,
+                bindings: &bindings,
+                label: Some("UniformBindGroup"),
+            });
+            uniform_bind_group.bind_group = Some(bind_group)
         }
+        uniform_bind_group
     }
 }
-// might not be needed after all?
-/*pub struct Uniform<T: Raw> {
-    _marker: PhantomData<T>,
-    buffer: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
-    bind_group_layout: wgpu::BindGroupLayout,
-}
 
-pub struct UniformStorage {
-    storage: SmallVec<[(TypeId, Box<dyn Any>); 7]>,
-}
+#[cfg(test)]
+mod tests {
 
-impl UniformStorage {
-    fn new() -> Self {
-        Self {
-            storage: SmallVec::default(),
+    use super::*;
+
+    struct Data1;
+    struct Data2;
+
+    impl Raw for Data1 {
+        fn as_raw_bytes(&self) -> &[u8] {
+            &[5, 0]
         }
     }
 
-    fn set_uniform<U: 'static>(&mut self, uniform: U) {
-        if let Some((id, _)) = self.storage.iter().find(|(id, _)| id == &TypeId::of::<U>()) {
-            println!("{:?}, allready added as a uniform", id);
-            return;
+    impl Raw for Data2 {
+        fn as_raw_bytes(&self) -> &[u8] {
+            &[5, 0]
         }
-        self.storage.push((TypeId::of::<U>(), Box::new(uniform)));
     }
 
-    fn get_uniform<U: 'static>(&self) -> Option<&U> {
-        self.storage
-            .iter()
-            .find(|(id, _)| id == &TypeId::of::<U>())
-            .map(|(_, boxed_val)| boxed_val.downcast_ref::<U>().unwrap())
-    }
+    #[test]
+    fn construction() {
+        let test = UniformBindGroup::builder()
+            .add_binding::<Data1>(wgpu::ShaderStage::VERTEX)
+            .add_binding::<Data2>(wgpu::ShaderStage::FRAGMENT)
+            .build();
 
-    fn get_uniform_mut<U: 'static>(&mut self) -> Option<&mut U> {
-        self.storage
-            .iter_mut()
-            .find(|(id, _)| id == &TypeId::of::<U>())
-            .map(|(_, boxed_val)| boxed_val.downcast_mut::<U>().unwrap())
+        let expected_layout = &wgpu::BindGroupLayout {}
+        test.get_layout();
     }
-}*/
+}
