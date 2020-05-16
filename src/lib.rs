@@ -2,9 +2,18 @@ pub mod shader;
 pub mod uniforms;
 pub mod vertex_buffers;
 pub mod texture;
+pub mod render_node;
 
 use std::path::PathBuf;
 use thiserror::Error;
+
+pub unsafe trait GpuData: 'static {
+    fn as_raw_bytes(&self) -> &[u8];
+}
+// TODO: Add index format associated type to this trait
+pub trait VertexBufferData: GpuData {
+    fn get_descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a>;
+}
 
 #[derive(Error, Debug)]
 pub enum RenderError {
@@ -14,6 +23,12 @@ pub enum RenderError {
         compile_error: String,
         path: PathBuf,
     },
+
+    #[error("You must set a VertexShader")]
+    MissingVertexShader,
+
+    #[error("Couldn't open image")]
+    TextureLoadError(#[from] image::ImageError),
     
     #[error("Issue with shader file")]
     ShaderFileError(#[from] std::io::Error),

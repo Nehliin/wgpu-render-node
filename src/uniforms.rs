@@ -1,9 +1,7 @@
-use crate::RenderError;
+use crate::{GpuData, RenderError};
 use smallvec::SmallVec;
 use std::any::TypeId;
-pub unsafe trait GpuData {
-    fn as_raw_bytes(&self) -> &[u8];
-}
+
 
 const UNIFORM_STACK_LIMIT: usize = 5;
 struct BindingInfo {
@@ -34,7 +32,7 @@ impl UniformBindGroup {
     }
 
     //TODO: a general Trait instead?
-    pub fn update_buffer_data<T: GpuData + 'static>(
+    pub fn update_buffer_data<T: GpuData>(
         &self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
@@ -69,14 +67,14 @@ impl UniformBindGroupBuilder {
         }
     }
 
-    pub fn add_binding<T: GpuData + 'static>(
+    pub fn add_binding<T: GpuData>(
         mut self,
         visibility: wgpu::ShaderStage,
     ) -> Result<Self, RenderError> {
-        if let Some((id, _)) = self
+        if self
             .builder_data
             .iter()
-            .find(|(id, _)| id == &TypeId::of::<T>())
+            .any(|(id, _)| id == &TypeId::of::<T>())
         {
             return Err(RenderError::GpuDataTypeAlreadyPresent);
         }
