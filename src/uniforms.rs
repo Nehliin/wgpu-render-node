@@ -1,10 +1,7 @@
+use crate::RenderError;
 use smallvec::SmallVec;
-use std::{
-    any::{Any, TypeId},
-    marker::PhantomData,
-};
-
-pub trait Raw {
+use std::any::TypeId;
+pub unsafe trait GpuData {
     fn as_raw_bytes(&self) -> &[u8];
 }
 
@@ -16,7 +13,7 @@ struct BindingInfo {
 
 pub struct UniformBindGroup {
     buffers: SmallVec<[(TypeId, wgpu::Buffer); UNIFORM_STACK_LIMIT]>,
-    bind_group: Option<wgpu::BindGroup>,
+    bind_group: Option<wgpu::BindGroup>, //Very ugly
     bind_group_layout: wgpu::BindGroupLayout,
 }
 
@@ -37,12 +34,12 @@ impl UniformBindGroup {
     }
 
     //TODO: a general Trait instead?
-    pub fn upload<T: Raw + 'static>(
+    pub fn update_buffer_data<T: GpuData + 'static>(
         &self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         data: &T,
-    ) {
+    ) -> Result<(), RenderError> {
         if let Some((_, buffer)) = self.buffers.iter().find(|(id, _)| id == &TypeId::of::<T>()) {
             let staging_buffer =
                 device.create_buffer_with_data(data.as_raw_bytes(), wgpu::BufferUsage::COPY_SRC);
@@ -53,9 +50,10 @@ impl UniformBindGroup {
                 &buffer,
                 0,
                 std::mem::size_of::<T>() as wgpu::BufferAddress,
-            )
+            );
+            Ok(())
         } else {
-            println!("No such uniform binding exists {:?}", TypeId::of::<T>());
+            Err(RenderError::GpuDataTypeNotPresent)
         }
     }
 }
@@ -71,21 +69,26 @@ impl UniformBindGroupBuilder {
         }
     }
 
-    pub fn add_binding<T: Raw + 'static>(mut self, visibility: wgpu::ShaderStage) -> Self {
+    pub fn add_binding<T: GpuData + 'static>(
+        mut self,
+        visibility: wgpu::ShaderStage,
+    ) -> Result<Self, RenderError> {
         if let Some((id, _)) = self
             .builder_data
             .iter()
             .find(|(id, _)| id == &TypeId::of::<T>())
         {
-            println!("{:?}, already added as a binding", id);
-            return self;
+            return Err(RenderError::GpuDataTypeAlreadyPresent);
+        }
+        if std::mem::size_of::<T>() == 0 {
+            return Err(RenderError::ZeroSizedGpuData);
         }
         let binding_info = BindingInfo {
             size: std::mem::size_of::<T>(),
             visibility,
         };
         self.builder_data.push((TypeId::of::<T>(), binding_info));
-        self
+        Ok(self)
     }
 
     pub fn build(self, device: &wgpu::Device) -> UniformBindGroup {
@@ -149,29 +152,101 @@ mod tests {
 
     use super::*;
 
-    struct Data1;
-    struct Data2;
+    fn create_test_env() -> (wgpu::Device, wgpu::Queue) {
+        futures::executor::block_on(async {
+            let adapter = wgpu::Adapter::request(
+                &wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::Default,
+                    compatible_surface: None,
+                },
+                wgpu::BackendBit::PRIMARY,
+            )
+            .await
+            .unwrap();
+            adapter
+                .request_device(&wgpu::DeviceDescriptor {
+                    extensions: wgpu::Extensions {
+                        anisotropic_filtering: false,
+                    },
+                    limits: Default::default(),
+                })
+                .await
+        })
+    }
+    #[repr(C)]
+    #[derive(Debug, PartialEq)]
+    struct Data1 {
+        dummy: i32,
+    }
+    #[repr(C)]
+    #[derive(Debug, PartialEq)]
+    struct Data2 {
+        dummy: i32,
+    }
+    #[repr(C)]
+    #[derive(Debug, PartialEq)]
+    struct Data3 {
+        dummy: i32,
+    }
 
-    impl Raw for Data1 {
+    unsafe impl GpuData for Data1 {
         fn as_raw_bytes(&self) -> &[u8] {
-            &[5, 0]
+            unsafe {
+                std::slice::from_raw_parts(
+                    self as *const Data1 as *const u8,
+                    std::mem::size_of::<Self>(),
+                )
+            }
         }
     }
 
-    impl Raw for Data2 {
+    unsafe impl GpuData for Data2 {
         fn as_raw_bytes(&self) -> &[u8] {
-            &[5, 0]
+            unsafe {
+                std::slice::from_raw_parts(
+                    self as *const Data2 as *const u8,
+                    std::mem::size_of::<Self>(),
+                )
+            }
+        }
+    }
+
+    unsafe impl GpuData for Data3 {
+        fn as_raw_bytes(&self) -> &[u8] {
+            unsafe {
+                std::slice::from_raw_parts(
+                    self as *const Data3 as *const u8,
+                    std::mem::size_of::<Self>(),
+                )
+            }
         }
     }
 
     #[test]
-    fn construction() {
-        let test = UniformBindGroup::builder()
-            .add_binding::<Data1>(wgpu::ShaderStage::VERTEX)
-            .add_binding::<Data2>(wgpu::ShaderStage::FRAGMENT)
-            .build();
+    fn construction() -> Result<(), RenderError> {
+        let (device, _) = create_test_env();
+        let group = UniformBindGroup::builder()
+            .add_binding::<Data1>(wgpu::ShaderStage::VERTEX)?
+            .add_binding::<Data2>(wgpu::ShaderStage::FRAGMENT)?
+            .build(&device);
 
-        let expected_layout = &wgpu::BindGroupLayout {}
-        test.get_layout();
+        let data1 = Data1 { dummy: 1 };
+
+        let data2 = Data2 { dummy: 2 };
+        let data3 = Data3 { dummy: 3 };
+
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        assert!(group
+            .update_buffer_data(&device, &mut encoder, &data1)
+            .is_ok());
+        assert!(group
+            .update_buffer_data(&device, &mut encoder, &data2)
+            .is_ok());
+        assert!(group
+            .update_buffer_data(&device, &mut encoder, &data3)
+            .is_err());
+        Ok(())
     }
 }
