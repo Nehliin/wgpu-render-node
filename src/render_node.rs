@@ -156,7 +156,7 @@ impl<'a> RenderNode<'a> {
         &self,
         command_encoder: &mut wgpu::CommandEncoder,
         render_pass_descriptor: &wgpu::RenderPassDescriptor,
-        mut func: impl FnMut(&Self, &mut wgpu::RenderPass),
+        func: impl Fn(&Self, &mut wgpu::RenderPass),
     ) {
         let mut render_pass = command_encoder.begin_render_pass(render_pass_descriptor);
         render_pass.set_pipeline(&self.pipeline);

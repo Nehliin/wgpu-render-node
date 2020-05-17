@@ -133,7 +133,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
     let buffer = create_vertex_buffer(&device);
 
     event_loop.run(move |event, _, control_flow| {
-        let _ = &buffer;
+       // let buffer = buffer;
         match event {
             event::Event::MainEventsCleared => {
                 window.request_redraw();
@@ -186,6 +186,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                         ),
                     },
                     |node, pass| {
+                        // problem is that the outer closure doesn't allow the buffer to be moved
                         pass.set_vertex_buffer(0, &buffer, 0, 0);
                     },
                 )
