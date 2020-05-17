@@ -2,7 +2,6 @@ use crate::{GpuData, RenderError};
 use smallvec::SmallVec;
 use std::any::TypeId;
 
-
 const UNIFORM_STACK_LIMIT: usize = 5;
 struct BindingInfo {
     size: usize,
