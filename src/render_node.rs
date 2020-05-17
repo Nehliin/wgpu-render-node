@@ -77,7 +77,7 @@ impl<'a> RenderNodeBuilder<'a> {
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &render_pipeline_layout,
-            vertex_stage: self.vertex_shader.unwrap().get_descriptor(),
+            vertex_stage: self.vertex_shader.as_ref().unwrap().get_descriptor(),
             fragment_stage: self
                 .fragment_shader
                 .as_ref()
@@ -142,10 +142,21 @@ impl<'a> RenderNode<'a> {
         RenderNodeBuilder::default()
     }
 
+    #[inline]
+    pub fn update(
+        &self,
+        device: &wgpu::Device,
+        command_encoder: &mut wgpu::CommandEncoder,
+        mut func: impl FnMut(&Self, &wgpu::Device, &mut wgpu::CommandEncoder),
+    ) {
+        func(&self, device, command_encoder)
+    }
+
     pub fn run(
         &self,
         command_encoder: &mut wgpu::CommandEncoder,
         render_pass_descriptor: &wgpu::RenderPassDescriptor,
+        mut func: impl FnMut(&Self, &mut wgpu::RenderPass),
     ) {
         let mut render_pass = command_encoder.begin_render_pass(render_pass_descriptor);
         render_pass.set_pipeline(&self.pipeline);
@@ -155,6 +166,7 @@ impl<'a> RenderNode<'a> {
             .for_each(|(i, group)| {
                 render_pass.set_bind_group(i as u32, group.get_bind_group(), &[]);
             });
-        todo!("Decide on how to give node render commands")
+        //todo!("Decide on how to give node render commands")
+        func(&self, &mut render_pass);
     }
 }

@@ -2,7 +2,6 @@ use crate::RenderError;
 use image::GenericImage;
 use std::path::Path;
 
-
 pub trait Texture {
     fn load(
         device: &wgpu::Device,
@@ -138,4 +137,3 @@ impl Texture for SimpleTexture {
         &self.bind_group
     }
 }
-
