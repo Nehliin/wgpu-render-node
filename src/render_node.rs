@@ -16,6 +16,7 @@ pub struct RenderNode<'a> {
     vertex_shader: VertexShader,
     fragment_shader: Option<FragmentShader>,
     pipeline: wgpu::RenderPipeline,
+    //    func: T
     //    textures: Vec<dyn Texture>
 }
 
@@ -26,6 +27,7 @@ pub struct RenderNodeBuilder<'a> {
     uniform_bind_groups: Vec<UniformBindGroup>,
     vertex_shader: Option<VertexShader>,
     fragment_shader: Option<FragmentShader>,
+    //  func: Option<T>,
 }
 
 impl<'a> RenderNodeBuilder<'a> {
@@ -49,6 +51,11 @@ impl<'a> RenderNodeBuilder<'a> {
         self.fragment_shader = Some(fragment_shader);
         self
     }
+
+    /*    pub fn set_render_func(mut self, func: T) -> Self {
+        self.func = Some(func);
+        self
+    }*/
 
     fn construct_pipeline(
         &self,
@@ -132,6 +139,7 @@ impl<'a> RenderNodeBuilder<'a> {
                 vertex_shader: self.vertex_shader.unwrap(),
                 fragment_shader: self.fragment_shader,
                 pipeline,
+                //                func: self.func.unwrap()
             })
         }
     }
@@ -139,7 +147,13 @@ impl<'a> RenderNodeBuilder<'a> {
 
 impl<'a> RenderNode<'a> {
     pub fn builder() -> RenderNodeBuilder<'a> {
-        RenderNodeBuilder::default()
+        RenderNodeBuilder {
+            //            func: None,
+            vertex_buffers: SmallVec::new(),
+            vertex_shader: None,
+            fragment_shader: None,
+            uniform_bind_groups: Vec::new(),
+        }
     }
 
     #[inline]
@@ -147,18 +161,18 @@ impl<'a> RenderNode<'a> {
         &self,
         device: &wgpu::Device,
         command_encoder: &mut wgpu::CommandEncoder,
-        mut func: impl FnMut(&Self, &wgpu::Device, &mut wgpu::CommandEncoder),
+        //        mut func: impl FnMut(&Self, &wgpu::Device, &mut wgpu::CommandEncoder),
     ) {
-        func(&self, device, command_encoder)
+        //        func(&self, device, command_encoder)
     }
 
-    pub fn run(
-        &self,
-        command_encoder: &mut wgpu::CommandEncoder,
-        render_pass_descriptor: &wgpu::RenderPassDescriptor,
-        func: impl Fn(&Self, &mut wgpu::RenderPass),
-    ) {
-        let mut render_pass = command_encoder.begin_render_pass(render_pass_descriptor);
+    pub fn run<'b, 'c: 'b>(
+        &'c self,
+        command_encoder: &'b mut wgpu::CommandEncoder,
+        // this could be owned
+        render_pass_descriptor: wgpu::RenderPassDescriptor<'b, '_>,
+    ) -> wgpu::RenderPass<'b> {
+        let mut render_pass = command_encoder.begin_render_pass(&render_pass_descriptor);
         render_pass.set_pipeline(&self.pipeline);
         self.uniform_bind_groups
             .iter()
@@ -167,6 +181,7 @@ impl<'a> RenderNode<'a> {
                 render_pass.set_bind_group(i as u32, group.get_bind_group(), &[]);
             });
         //todo!("Decide on how to give node render commands")
-        func(&self, &mut render_pass);
+        //(self.func)(&mut render_pass);
+        render_pass
     }
 }

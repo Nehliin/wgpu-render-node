@@ -19,6 +19,10 @@ pub trait VertexBufferData: GpuData {
     fn get_descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a>;
 }
 
+pub trait Drawable {
+    fn draw<'b, 'a: 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>);
+}
+
 #[derive(Error, Debug)]
 pub enum RenderError {
     #[error("Couldn't compile shader file {path:?}: {compile_error:?}")]

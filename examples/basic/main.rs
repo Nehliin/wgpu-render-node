@@ -29,11 +29,11 @@ fn create_depth_texture(
 }
 
 #[repr(C)]
-struct VertexData {
+struct Vertex {
     pos: [f32; 3],
 }
 
-unsafe impl GpuData for VertexData {
+unsafe impl GpuData for Vertex {
     fn as_raw_bytes(&self) -> &[u8] {
         unsafe {
             std::slice::from_raw_parts(
@@ -44,25 +44,36 @@ unsafe impl GpuData for VertexData {
     }
 }
 
-impl VertexBufferData for VertexData {
+impl VertexBufferData for Vertex {
     fn get_descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a> {
         wgpu::VertexBufferDescriptor {
-            stride: std::mem::size_of::<VertexData> as wgpu::BufferAddress,
+            stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::InputStepMode::Vertex,
             attributes: &wgpu::vertex_attr_array![0 => Float3],
         }
     }
 }
 
+struct Triangle {
+    vertices: wgpu::Buffer,
+}
+
+impl Drawable for Triangle {
+    fn draw<'b, 'a: 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
+        render_pass.set_vertex_buffer(0, &self.vertices, 0, 0);
+        render_pass.draw(0..3, 0..1);
+    }
+}
+
 // create new Vertexbuffer struct which acts as a vec where you can add VertebufferData and get a buffer?
-fn create_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer {
-    let left_corner = VertexData {
+fn create_vertex_buffer(device: &wgpu::Device) -> Triangle {
+    let left_corner = Vertex {
         pos: [-1.0, 0.0, 0.0],
     };
-    let right_corner = VertexData {
+    let right_corner = Vertex {
         pos: [1.0, 0.0, 0.0],
     };
-    let top = VertexData {
+    let top = Vertex {
         pos: [0.0, 1.0, 0.0],
     };
     // maybe incorrect order
@@ -73,27 +84,11 @@ fn create_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer {
         .flatten()
         .copied()
         .collect::<Vec<u8>>();
-    device.create_buffer_with_data(bytes.as_slice(), wgpu::BufferUsage::VERTEX)
+    println!("{}", bytes.len());
+    Triangle {
+        vertices: device.create_buffer_with_data(bytes.as_slice(), wgpu::BufferUsage::VERTEX),
+    }
 }
-
-fn create_node<'a>(device: &wgpu::Device, color_format: wgpu::TextureFormat) -> RenderNode<'a> {
-    let vertex_shader = VertexShader::builder()
-        .set_shader_file("examples/basic/shader.vs")
-        .build(device)
-        .unwrap();
-    let fragment_shader = FragmentShader::builder()
-        .set_shader_file("examples/basic/shader.fs")
-        .build(device)
-        .unwrap();
-
-    RenderNode::builder()
-        .add_vertex_buffer::<VertexData>()
-        .set_vertex_shader(vertex_shader)
-        .set_fragment_shader(fragment_shader)
-        .build(device, color_format, DEPTH_FORMAT)
-        .unwrap()
-}
-
 
 async fn run_example(event_loop: EventLoop<()>, window: Window) {
     let size = window.inner_size();
@@ -129,11 +124,35 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
     let depth_texture_view = depth_texture.create_default_view();
     let mut swap_chain = device.create_swap_chain(&surface, &swap_chain_desc);
     //let format = swap_chain_desc.format;
-    let render_node = create_node(&device, swap_chain_desc.format);
     let buffer = create_vertex_buffer(&device);
+    let vertex_shader = VertexShader::builder()
+        .set_shader_file("examples/basic/shader.vs")
+        .build(&device)
+        .unwrap();
+    let fragment_shader = FragmentShader::builder()
+        .set_shader_file("examples/basic/shader.fs")
+        .build(&device)
+        .unwrap();
 
+    let render_node = RenderNode::builder()
+        .add_vertex_buffer::<Vertex>()
+        .set_vertex_shader(vertex_shader)
+        .set_fragment_shader(fragment_shader)
+        //.set_render_func(|pass| {
+        //  pass.set_vertex_buffer(0, &buffer, 0, 0);
+        //})
+        .build(&device, swap_chain_desc.format, DEPTH_FORMAT)
+        .unwrap();
     event_loop.run(move |event, _, control_flow| {
-       // let buffer = buffer;
+        // let buffer = buffer;
+        let _ = (
+            &render_node,
+            &buffer,
+            &device,
+            &queue,
+            &swap_chain,
+            &swap_chain_desc,
+        );
         match event {
             event::Event::MainEventsCleared => {
                 window.request_redraw();
@@ -151,20 +170,19 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                 | WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit;
                 }
-                _ => {} 
+                _ => {}
             },
             event::Event::RedrawRequested(_) => {
                 let frame = swap_chain.get_next_texture().unwrap();
-                let mut encoder = 
-                    device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-                render_node.run(
+                let mut encoder =
+                    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                let mut pass = render_node.run(
                     &mut encoder,
-                    &wgpu::RenderPassDescriptor {
+                    wgpu::RenderPassDescriptor {
                         color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                             attachment: &frame.view,
                             resolve_target: None,
-                            load_op: wgpu::LoadOp::Load,
+                            load_op: wgpu::LoadOp::Clear,
                             store_op: wgpu::StoreOp::Store,
                             clear_color: wgpu::Color {
                                 r: 0.1,
@@ -185,11 +203,10 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                             },
                         ),
                     },
-                    |node, pass| {
-                        // problem is that the outer closure doesn't allow the buffer to be moved
-                        pass.set_vertex_buffer(0, &buffer, 0, 0);
-                    },
-                )
+                );
+                buffer.draw(&mut pass);
+                drop(pass);
+                queue.submit(&[encoder.finish()]);
             }
             _ => {}
         }
