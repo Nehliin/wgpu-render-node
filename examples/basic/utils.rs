@@ -1,6 +1,8 @@
 use super::Camera;
 use crate::{to_vec, ModelInfo};
 use smol_renderer::*;
+
+
 #[repr(C)]
 #[derive(GpuData)]
 pub struct CameraGpuData {
@@ -78,6 +80,8 @@ pub fn create_depth_texture(
     };
     device.create_texture(&desc)
 }
+
+
 #[repr(C)]
 #[derive(GpuData)]
 pub struct Vertex {
