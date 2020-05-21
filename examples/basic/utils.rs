@@ -8,16 +8,7 @@ pub struct CameraGpuData {
     pub view_pos: [f32; 3],
 }
 
-unsafe impl GpuData for CameraGpuData {
-    fn as_raw_bytes(&self) -> &[u8] {
-        unsafe {
-            std::slice::from_raw_parts(
-                self as *const CameraGpuData as *const u8,
-                std::mem::size_of::<CameraGpuData>(),
-            )
-        }
-    }
-}
+unsafe impl GpuData for CameraGpuData {}
 
 impl From<Camera> for CameraGpuData {
     fn from(data: Camera) -> Self {
@@ -67,16 +58,7 @@ pub struct RawModelInfo {
     pub model_matrix: [[f32; 4]; 4],
 }
 
-unsafe impl GpuData for RawModelInfo {
-    fn as_raw_bytes(&self) -> &[u8] {
-        unsafe {
-            std::slice::from_raw_parts(
-                self as *const RawModelInfo as *const u8,
-                std::mem::size_of::<RawModelInfo>(),
-            )
-        }
-    }
-}
+unsafe impl GpuData for RawModelInfo {}
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 pub fn create_depth_texture(

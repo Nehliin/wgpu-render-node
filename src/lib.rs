@@ -12,7 +12,11 @@ pub use shader::{FragmentShader, FragmentShaderBuilder, VertexShader, VertexShad
 pub use texture::{SimpleTexture, Texture};
 pub use uniforms::{UniformBindGroup, UniformBindGroupBuilder};
 pub unsafe trait GpuData: 'static {
-    fn as_raw_bytes(&self) -> &[u8];
+    fn as_raw_bytes(&self) -> &[u8] where Self: std::marker::Sized  {
+        unsafe {
+            std::slice::from_raw_parts(self as *const Self as *const u8, std::mem::size_of::<Self>())
+        }
+    }
 }
 // TODO: Add index format associated type to this trait
 pub trait VertexBufferData: GpuData {
