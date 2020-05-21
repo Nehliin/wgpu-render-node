@@ -2,13 +2,12 @@ use super::Camera;
 use crate::{to_vec, ModelInfo};
 use smol_renderer::*;
 #[repr(C)]
+#[derive(GpuData)]
 pub struct CameraGpuData {
     pub view_matrix: [[f32; 4]; 4],
     pub projection: [[f32; 4]; 4],
     pub view_pos: [f32; 3],
 }
-
-unsafe impl GpuData for CameraGpuData {}
 
 impl From<Camera> for CameraGpuData {
     fn from(data: Camera) -> Self {
@@ -52,13 +51,11 @@ impl From<ModelInfo> for RawModelInfo {
         }
     }
 }
-
 #[repr(C)]
+#[derive(GpuData)]
 pub struct RawModelInfo {
     pub model_matrix: [[f32; 4]; 4],
 }
-
-unsafe impl GpuData for RawModelInfo {}
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 pub fn create_depth_texture(
@@ -81,8 +78,8 @@ pub fn create_depth_texture(
     };
     device.create_texture(&desc)
 }
-
 #[repr(C)]
+#[derive(GpuData)]
 pub struct Vertex {
     pos: [f32; 3],
     tex_coord: [f32; 2],
@@ -95,16 +92,6 @@ fn vertex(position: [i8; 3], tc: [i8; 2]) -> Vertex {
     }
 }
 
-unsafe impl GpuData for Vertex {
-    fn as_raw_bytes(&self) -> &[u8] {
-        unsafe {
-            std::slice::from_raw_parts(
-                self as *const Vertex as *const u8,
-                std::mem::size_of::<Vertex>(),
-            )
-        }
-    }
-}
 
 impl VertexBufferData for Vertex {
     fn get_descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a> {
@@ -127,7 +114,6 @@ impl Drawable for Cube {
         render_pass.set_vertex_buffer(0, &self.vertices, 0, 0);
         render_pass.set_index_buffer(&self.index_buf, 0, 0);
         render_pass.draw_indexed(0..self.index_count, 0, 0..1);
-        //render_pass.draw(0..24, 0..1);
     }
 }
 

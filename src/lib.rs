@@ -6,6 +6,7 @@ pub mod uniforms;
 use std::path::PathBuf;
 use thiserror::Error;
 
+pub use smol_renderer_derive::*;
 pub use render_node::{RenderNode, RenderNodeBuilder};
 pub use shader::{FragmentShader, FragmentShaderBuilder, VertexShader, VertexShaderBuilder};
 pub use texture::{SimpleTexture, Texture};

@@ -12,6 +12,7 @@ smallvec = "1.4.0"
 thiserror = "1.0" 
 glsl-to-spirv = "0.1"
 image = "0.19"
+smol_renderer_derive = { path = "smol_renderer_derive"}
 
 [dev-dependencies]
 futures = "0.3"
