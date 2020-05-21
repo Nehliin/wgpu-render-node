@@ -3,7 +3,7 @@ use crate::{
     texture::Texture,
     uniforms::UniformBindGroup,
 };
-use crate::{RenderError, VertexBufferData};
+use crate::{RenderError, VertexBufferData, GpuData};
 use smallvec::SmallVec;
 use std::any::TypeId;
 
@@ -92,7 +92,7 @@ impl<'a> RenderNodeBuilder<'a> {
             // TODO: add customizable rasterization stage
             rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: wgpu::CullMode::Back,
+                cull_mode: wgpu::CullMode::None,
                 depth_bias: 0,
                 depth_bias_slope_scale: 0.0,
                 depth_bias_clamp: 0.0,
@@ -161,9 +161,10 @@ impl<'a> RenderNode<'a> {
         &self,
         device: &wgpu::Device,
         command_encoder: &mut wgpu::CommandEncoder,
-        //        mut func: impl FnMut(&Self, &wgpu::Device, &mut wgpu::CommandEncoder),
+        index: usize,
+        data: &impl GpuData
     ) {
-        //        func(&self, device, command_encoder)
+       self.uniform_bind_groups[index].update_buffer_data(device, command_encoder, data).unwrap() 
     }
 
     pub fn run<'b, 'c: 'b>(

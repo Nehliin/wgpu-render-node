@@ -1,92 +1,50 @@
+mod utils;
+
+use nalgebra::{Isometry3, Matrix4, Perspective3, Point3, Vector3};
+use smol_renderer::*;
+use utils::*;
 use winit::{
     event::{self, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
-
-use smol_renderer::*;
-
-pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-fn create_depth_texture(
-    device: &wgpu::Device,
-    sc_desc: &wgpu::SwapChainDescriptor,
-) -> wgpu::Texture {
-    let desc = wgpu::TextureDescriptor {
-        label: None,
-        size: wgpu::Extent3d {
-            width: sc_desc.width,
-            height: sc_desc.height,
-            depth: 1,
-        },
-        array_layer_count: 1,
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: DEPTH_FORMAT,
-        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-    };
-    device.create_texture(&desc)
+#[derive(Clone)]
+pub struct ModelInfo {
+    pub isometry: Isometry3<f32>,
 }
 
-#[repr(C)]
-struct Vertex {
-    pos: [f32; 3],
+#[derive(Clone)]
+pub struct Camera {
+    direction: Vector3<f32>,
+    position: Point3<f32>,
+    view_matrix: Matrix4<f32>,
+    projection_matrix: Perspective3<f32>,
 }
 
-unsafe impl GpuData for Vertex {
-    fn as_raw_bytes(&self) -> &[u8] {
-        unsafe {
-            std::slice::from_raw_parts(
-                self.pos.as_ptr() as *const u8,
-                self.pos.len() * std::mem::size_of::<f32>(),
-            )
+#[inline]
+fn to_vec(point: &Point3<f32>) -> Vector3<f32> {
+    Vector3::new(point.x, point.y, point.z)
+}
+impl Camera {
+    pub fn new(
+        position: Point3<f32>,
+        direction: Vector3<f32>,
+        window_width: u32,
+        window_height: u32,
+    ) -> Self {
+        // what POINT should the camera look at?
+        let view_target = position + direction;
+        Camera {
+            direction,
+            position,
+            view_matrix: Matrix4::look_at_rh(&position, &view_target, &Vector3::new(0.0, 1.0, 0.0)),
+            projection_matrix: Perspective3::new(
+                window_width as f32 / window_height as f32,
+                45.0,
+                0.1,
+                100.0,
+            ),
         }
-    }
-}
-
-impl VertexBufferData for Vertex {
-    fn get_descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a> {
-        wgpu::VertexBufferDescriptor {
-            stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::InputStepMode::Vertex,
-            attributes: &wgpu::vertex_attr_array![0 => Float3],
-        }
-    }
-}
-
-struct Triangle {
-    vertices: wgpu::Buffer,
-}
-
-impl Drawable for Triangle {
-    fn draw<'b, 'a: 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>) {
-        render_pass.set_vertex_buffer(0, &self.vertices, 0, 0);
-        render_pass.draw(0..3, 0..1);
-    }
-}
-
-// create new Vertexbuffer struct which acts as a vec where you can add VertebufferData and get a buffer?
-fn create_vertex_buffer(device: &wgpu::Device) -> Triangle {
-    let left_corner = Vertex {
-        pos: [-1.0, 0.0, 0.0],
-    };
-    let right_corner = Vertex {
-        pos: [1.0, 0.0, 0.0],
-    };
-    let top = Vertex {
-        pos: [0.0, 1.0, 0.0],
-    };
-    // maybe incorrect order
-    let bytes = vec![right_corner, top, left_corner];
-    let bytes = bytes
-        .iter()
-        .map(GpuData::as_raw_bytes)
-        .flatten()
-        .copied()
-        .collect::<Vec<u8>>();
-    println!("{}", bytes.len());
-    Triangle {
-        vertices: device.create_buffer_with_data(bytes.as_slice(), wgpu::BufferUsage::VERTEX),
     }
 }
 
@@ -124,7 +82,22 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
     let depth_texture_view = depth_texture.create_default_view();
     let mut swap_chain = device.create_swap_chain(&surface, &swap_chain_desc);
     //let format = swap_chain_desc.format;
-    let buffer = create_vertex_buffer(&device);
+    let cube = create_cube(&device);
+    let camera = Camera::new(
+        Point3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.0, 0.0, -1.0),
+        size.width,
+        size.height,
+    );
+    let mut model_info = ModelInfo {
+        isometry: Isometry3::translation(0.0, 0.0, -7.0),
+    };
+    model_info
+        .isometry
+        .append_rotation_wrt_center_mut(&nalgebra::UnitQuaternion::from_axis_angle(
+            &Vector3::y_axis(),
+            0.3,
+        ));
     let vertex_shader = VertexShader::builder()
         .set_shader_file("examples/basic/shader.vs")
         .build(&device)
@@ -138,16 +111,21 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
         .add_vertex_buffer::<Vertex>()
         .set_vertex_shader(vertex_shader)
         .set_fragment_shader(fragment_shader)
-        //.set_render_func(|pass| {
-        //  pass.set_vertex_buffer(0, &buffer, 0, 0);
-        //})
+        .add_uniform_bind_group(
+            UniformBindGroup::builder()
+                .add_binding::<CameraGpuData>(wgpu::ShaderStage::VERTEX)
+                .unwrap()
+                .add_binding::<RawModelInfo>(wgpu::ShaderStage::VERTEX)
+                .unwrap()
+                .build(&device),
+        )
         .build(&device, swap_chain_desc.format, DEPTH_FORMAT)
         .unwrap();
     event_loop.run(move |event, _, control_flow| {
-        // let buffer = buffer;
         let _ = (
             &render_node,
-            &buffer,
+            &cube,
+            &camera,
             &device,
             &queue,
             &swap_chain,
@@ -176,6 +154,18 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                 let frame = swap_chain.get_next_texture().unwrap();
                 let mut encoder =
                     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                render_node.update(
+                    &device,
+                    &mut encoder,
+                    0,
+                    &CameraGpuData::from(camera.clone()),
+                );
+                render_node.update(
+                    &device,
+                    &mut encoder,
+                    0,
+                    &RawModelInfo::from(model_info.clone()),
+                );
                 let mut pass = render_node.run(
                     &mut encoder,
                     wgpu::RenderPassDescriptor {
@@ -186,7 +176,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                             store_op: wgpu::StoreOp::Store,
                             clear_color: wgpu::Color {
                                 r: 0.1,
-                                g: 0.2,
+                                g: 0.7,
                                 b: 0.3,
                                 a: 1.0,
                             },
@@ -204,7 +194,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                         ),
                     },
                 );
-                buffer.draw(&mut pass);
+                cube.draw(&mut pass);
                 drop(pass);
                 queue.submit(&[encoder.finish()]);
             }
