@@ -1,6 +1,5 @@
 use crate::{
     shader::{FragmentShader, VertexShader},
-    texture::Texture,
     uniforms::UniformBindGroup,
 };
 use crate::{GpuData, RenderError, VertexBufferData};
