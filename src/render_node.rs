@@ -3,21 +3,15 @@ use crate::{
     texture::Texture,
     uniforms::UniformBindGroup,
 };
-use crate::{RenderError, VertexBufferData, GpuData};
+use crate::{GpuData, RenderError, VertexBufferData};
 use smallvec::SmallVec;
 use std::any::TypeId;
 
 const VERTX_BUFFER_STACK_LIMIT: usize = 3;
 
-pub struct RenderNode<'a> {
-    vertex_buffers:
-        SmallVec<[(TypeId, wgpu::VertexBufferDescriptor<'a>); VERTX_BUFFER_STACK_LIMIT]>,
+pub struct RenderNode {
     uniform_bind_groups: Vec<UniformBindGroup>,
-    vertex_shader: VertexShader,
-    fragment_shader: Option<FragmentShader>,
     pipeline: wgpu::RenderPipeline,
-    //    func: T
-    //    textures: Vec<dyn Texture>
 }
 
 #[derive(Default)]
@@ -27,7 +21,6 @@ pub struct RenderNodeBuilder<'a> {
     uniform_bind_groups: Vec<UniformBindGroup>,
     vertex_shader: Option<VertexShader>,
     fragment_shader: Option<FragmentShader>,
-    //  func: Option<T>,
 }
 
 impl<'a> RenderNodeBuilder<'a> {
@@ -51,11 +44,6 @@ impl<'a> RenderNodeBuilder<'a> {
         self.fragment_shader = Some(fragment_shader);
         self
     }
-
-    /*    pub fn set_render_func(mut self, func: T) -> Self {
-        self.func = Some(func);
-        self
-    }*/
 
     fn construct_pipeline(
         &self,
@@ -92,7 +80,7 @@ impl<'a> RenderNodeBuilder<'a> {
             // TODO: add customizable rasterization stage
             rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: wgpu::CullMode::None,
+                cull_mode: wgpu::CullMode::Back,
                 depth_bias: 0,
                 depth_bias_slope_scale: 0.0,
                 depth_bias_clamp: 0.0,
@@ -128,27 +116,22 @@ impl<'a> RenderNodeBuilder<'a> {
         device: &wgpu::Device,
         color_format: wgpu::TextureFormat,
         depth_format: wgpu::TextureFormat,
-    ) -> Result<RenderNode<'a>, RenderError> {
+    ) -> Result<RenderNode, RenderError> {
         if self.vertex_shader.is_none() {
             Err(RenderError::MissingVertexShader)
         } else {
             let pipeline = self.construct_pipeline(device, color_format, depth_format);
             Ok(RenderNode {
-                vertex_buffers: self.vertex_buffers,
                 uniform_bind_groups: self.uniform_bind_groups,
-                vertex_shader: self.vertex_shader.unwrap(),
-                fragment_shader: self.fragment_shader,
                 pipeline,
-                //                func: self.func.unwrap()
             })
         }
     }
 }
 
-impl<'a> RenderNode<'a> {
-    pub fn builder() -> RenderNodeBuilder<'a> {
+impl RenderNode {
+    pub fn builder<'a>() -> RenderNodeBuilder<'a> {
         RenderNodeBuilder {
-            //            func: None,
             vertex_buffers: SmallVec::new(),
             vertex_shader: None,
             fragment_shader: None,
@@ -161,14 +144,14 @@ impl<'a> RenderNode<'a> {
         &self,
         device: &wgpu::Device,
         command_encoder: &mut wgpu::CommandEncoder,
-        index: usize,
-        data: &impl GpuData
-    ) {
-       self.uniform_bind_groups[index].update_buffer_data(device, command_encoder, data).unwrap() 
+        bind_group_index: usize,
+        data: &impl GpuData,
+    ) -> Result<(), RenderError> {
+        self.uniform_bind_groups[bind_group_index].update_buffer_data(device, command_encoder, data)
     }
 
-    pub fn run<'b, 'c: 'b>(
-        &'c self,
+    pub fn run<'a: 'b, 'b>(
+        &'a self,
         command_encoder: &'b mut wgpu::CommandEncoder,
         // this could be owned
         render_pass_descriptor: wgpu::RenderPassDescriptor<'b, '_>,
@@ -181,8 +164,6 @@ impl<'a> RenderNode<'a> {
             .for_each(|(i, group)| {
                 render_pass.set_bind_group(i as u32, group.get_bind_group(), &[]);
             });
-        //todo!("Decide on how to give node render commands")
-        //(self.func)(&mut render_pass);
         render_pass
     }
 }

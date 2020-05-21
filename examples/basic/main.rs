@@ -159,13 +159,13 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                     &mut encoder,
                     0,
                     &CameraGpuData::from(camera.clone()),
-                );
+                ).unwrap();
                 render_node.update(
                     &device,
                     &mut encoder,
                     0,
                     &RawModelInfo::from(model_info.clone()),
-                );
+                ).unwrap();
                 let mut pass = render_node.run(
                     &mut encoder,
                     wgpu::RenderPassDescriptor {
