@@ -21,10 +21,6 @@ pub struct Camera {
     projection_matrix: Perspective3<f32>,
 }
 
-#[inline]
-fn to_vec(point: &Point3<f32>) -> Vector3<f32> {
-    Vector3::new(point.x, point.y, point.z)
-}
 impl Camera {
     pub fn new(
         position: Point3<f32>,

@@ -1,7 +1,8 @@
 use super::Camera;
-use crate::{to_vec, ModelInfo};
+use crate::{ModelInfo};
 use smol_renderer::*;
 use texture::TextureData;
+use nalgebra::{Vector3, Point3};
 
 
 #[repr(C)]
@@ -38,6 +39,11 @@ impl From<Camera> for CameraGpuData {
             view_pos: [view_pos.x, view_pos.y, view_pos.z],
         }
     }
+}
+
+#[inline]
+fn to_vec(point: &Point3<f32>) -> Vector3<f32> {
+    Vector3::new(point.x, point.y, point.z)
 }
 
 impl From<ModelInfo> for RawModelInfo {

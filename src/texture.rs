@@ -1,7 +1,7 @@
 use crate::RenderError;
 use image::GenericImage;
 use once_cell::sync::OnceCell;
-use std::{any::TypeId, marker::PhantomData, path::Path};
+use std::{marker::PhantomData, path::Path};
 
 pub trait Texture: 'static {
     fn load(
@@ -27,12 +27,7 @@ pub struct TextureData<T: Texture> {
     _marker: PhantomData<T>,
 }
 
-pub struct SimpleTexture {
-    //texture: wgpu::Texture,
-//view: wgpu::TextureView,
-//sampler: wgpu::Sampler,
-//bind_group_layout: wgpu::BindGroupLayout,
-}
+pub struct SimpleTexture;
 
 impl Texture for SimpleTexture {
     fn get_or_create_layout(
