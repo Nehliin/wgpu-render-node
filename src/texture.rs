@@ -1,31 +1,73 @@
 use crate::RenderError;
 use image::GenericImage;
-use std::path::Path;
+use once_cell::sync::OnceCell;
+use std::{any::TypeId, marker::PhantomData, path::Path};
 
-pub trait Texture {
+pub trait Texture: 'static {
     fn load(
         device: &wgpu::Device,
         path: impl AsRef<Path>,
         visibility: wgpu::ShaderStage,
-    ) -> Result<(Self, wgpu::CommandBuffer), RenderError>
+    ) -> Result<(TextureData<Self>, wgpu::CommandBuffer), RenderError>
     where
         Self: std::marker::Sized;
-    fn get_bind_group(&self) -> &wgpu::BindGroup;
+    fn get_or_create_layout(
+        device: &wgpu::Device,
+        visibility: wgpu::ShaderStage,
+    ) -> &'static wgpu::BindGroupLayout;
 }
 
-pub struct SimpleTexture {
+// separate to SimpleTexture and simpleTexture data, same thing for vertexbuffers
+
+pub struct TextureData<T: Texture> {
+    pub(crate) bind_group: wgpu::BindGroup,
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
-    bind_group: wgpu::BindGroup,
+    _marker: PhantomData<T>,
+}
+
+pub struct SimpleTexture {
+    //texture: wgpu::Texture,
+//view: wgpu::TextureView,
+//sampler: wgpu::Sampler,
+//bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl Texture for SimpleTexture {
+    fn get_or_create_layout(
+        device: &wgpu::Device,
+        visibility: wgpu::ShaderStage,
+    ) -> &'static wgpu::BindGroupLayout {
+        static LAYOUT: OnceCell<wgpu::BindGroupLayout> = OnceCell::new();
+        LAYOUT.get_or_init(move || {
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                bindings: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility,
+                        ty: wgpu::BindingType::SampledTexture {
+                            dimension: wgpu::TextureViewDimension::D2,
+                            component_type: wgpu::TextureComponentType::Float,
+                            multisampled: false,
+                        },
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility,
+                        ty: wgpu::BindingType::Sampler { comparison: true },
+                    },
+                ],
+                label: None,
+            })
+        })
+    }
+
     fn load(
         device: &wgpu::Device,
         path: impl AsRef<Path>,
         visibility: wgpu::ShaderStage,
-    ) -> Result<(Self, wgpu::CommandBuffer), RenderError> {
+    ) -> Result<(TextureData<SimpleTexture>, wgpu::CommandBuffer), RenderError> {
         let img = image::open(path)?;
         let img = img.flipv();
 
@@ -87,28 +129,8 @@ impl Texture for SimpleTexture {
             compare: wgpu::CompareFunction::Always,
         });
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            bindings: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility,
-                    ty: wgpu::BindingType::SampledTexture {
-                        dimension: wgpu::TextureViewDimension::D2,
-                        component_type: wgpu::TextureComponentType::Float,
-                        multisampled: false,
-                    },
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility,
-                    ty: wgpu::BindingType::Sampler { comparison: true },
-                },
-            ],
-            label: Some("SimpleTextureBindGroupLayout"),
-        });
-
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
+            layout: &Self::get_or_create_layout(device, visibility),
             bindings: &[
                 wgpu::Binding {
                     binding: 0,
@@ -121,19 +143,13 @@ impl Texture for SimpleTexture {
             ],
             label: Some("SimpleTextureBindGroup"),
         });
-
-        Ok((
-            Self {
-                texture,
-                view,
-                sampler,
-                bind_group,
-            },
-            command_buffer,
-        ))
-    }
-
-    fn get_bind_group(&self) -> &wgpu::BindGroup {
-        &self.bind_group
+        let texture_data = TextureData {
+            bind_group,
+            sampler,
+            view,
+            texture,
+            _marker: PhantomData::default(),
+        };
+        Ok((texture_data, command_buffer))
     }
 }

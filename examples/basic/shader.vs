@@ -2,6 +2,7 @@
 
 layout(location = 0) in vec3 pos;
 layout(location = 1) in vec2 tex_coords;
+layout(location = 0) out vec2 out_tex_coords;
 
 layout(set = 0, binding = 0) 
 uniform Camera {
@@ -23,6 +24,7 @@ const mat4 CONVERSION = mat4(
 );
 
 void main() {
+    out_tex_coords = tex_coords;
     vec3 fragment_position = vec3(model * vec4(pos, 1.0));
     gl_Position = CONVERSION * projection * view  * vec4(fragment_position, 1.0);
 }

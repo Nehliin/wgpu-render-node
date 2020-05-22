@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 pub use smol_renderer_derive::*;
-pub use render_node::{RenderNode, RenderNodeBuilder};
+pub use render_node::{RenderNode, RenderNodeBuilder, RenderNodeRunner};
 pub use shader::{FragmentShader, FragmentShaderBuilder, VertexShader, VertexShaderBuilder};
 pub use texture::{SimpleTexture, Texture};
 pub use uniforms::{UniformBindGroup, UniformBindGroupBuilder};
@@ -21,10 +21,6 @@ pub unsafe trait GpuData: 'static {
 // TODO: Add index format associated type to this trait
 pub trait VertexBufferData: GpuData {
     fn get_descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a>;
-}
-
-pub trait Drawable {
-    fn draw<'b, 'a: 'b>(&'a self, render_pass: &'b mut wgpu::RenderPass<'a>);
 }
 
 #[derive(Error, Debug)]

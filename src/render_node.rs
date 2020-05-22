@@ -2,7 +2,7 @@ use crate::{
     shader::{FragmentShader, VertexShader},
     uniforms::UniformBindGroup,
 };
-use crate::{GpuData, RenderError, VertexBufferData};
+use crate::{texture::TextureData, GpuData, RenderError, Texture, VertexBufferData};
 use smallvec::SmallVec;
 use std::any::TypeId;
 
@@ -10,7 +10,30 @@ const VERTX_BUFFER_STACK_LIMIT: usize = 3;
 
 pub struct RenderNode {
     uniform_bind_groups: Vec<UniformBindGroup>,
+    texture_types: Vec<TypeId>,
     pipeline: wgpu::RenderPipeline,
+}
+
+pub struct RenderNodeRunner<'a, 'b: 'a> {
+    render_pass: wgpu::RenderPass<'a>,
+    texture_types: &'b Vec<TypeId>,
+    uniform_group_count: u32,
+}
+
+impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
+    pub fn set_texture_data<T: Texture>(&mut self, index: u32, data: &'b TextureData<T>) {
+        // could be a debug assert
+        if TypeId::of::<T>() == self.texture_types[(index - self.uniform_group_count) as usize] {
+            self.render_pass
+                .set_bind_group(index, &data.bind_group, &[]);
+        } else {
+            println!("Det sket sig");
+        }
+    }
+
+    pub fn get_pass(&mut self) -> &mut wgpu::RenderPass<'a> {
+        &mut self.render_pass
+    }
 }
 
 #[derive(Default)]
@@ -20,6 +43,9 @@ pub struct RenderNodeBuilder<'a> {
     uniform_bind_groups: Vec<UniformBindGroup>,
     vertex_shader: Option<VertexShader>,
     fragment_shader: Option<FragmentShader>,
+    texture_types: Vec<TypeId>,
+    texture_layout_generators:
+        Vec<Box<dyn Fn(&wgpu::Device, wgpu::ShaderStage) -> &'static wgpu::BindGroupLayout>>,
 }
 
 impl<'a> RenderNodeBuilder<'a> {
@@ -31,6 +57,13 @@ impl<'a> RenderNodeBuilder<'a> {
 
     pub fn add_uniform_bind_group(mut self, uniform: UniformBindGroup) -> Self {
         self.uniform_bind_groups.push(uniform);
+        self
+    }
+
+    pub fn add_texture<T: Texture>(mut self, visibility: wgpu::ShaderStage) -> Self {
+        self.texture_types.push(TypeId::of::<T>());
+        self.texture_layout_generators
+            .push(Box::new(T::get_or_create_layout));
         self
     }
 
@@ -50,13 +83,18 @@ impl<'a> RenderNodeBuilder<'a> {
         color_format: wgpu::TextureFormat,
         depth_format: wgpu::TextureFormat,
     ) -> wgpu::RenderPipeline {
+        
+        let texture_layouts = self
+            .texture_layout_generators
+            .iter()
+            .map(|gen| gen(&device, wgpu::ShaderStage::FRAGMENT));
+
         let bind_group_layouts = self
             .uniform_bind_groups
             .iter()
             .map(UniformBindGroup::get_layout)
+            .chain(texture_layouts)
             .collect::<Vec<&wgpu::BindGroupLayout>>();
-
-        // TODO: Add texture bindgroup layouts here as well
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -123,6 +161,7 @@ impl<'a> RenderNodeBuilder<'a> {
             Ok(RenderNode {
                 uniform_bind_groups: self.uniform_bind_groups,
                 pipeline,
+                texture_types: self.texture_types,
             })
         }
     }
@@ -135,6 +174,8 @@ impl RenderNode {
             vertex_shader: None,
             fragment_shader: None,
             uniform_bind_groups: Vec::new(),
+            texture_layout_generators: Vec::new(),
+            texture_types: Vec::new(),
         }
     }
 
@@ -149,12 +190,11 @@ impl RenderNode {
         self.uniform_bind_groups[bind_group_index].update_buffer_data(device, command_encoder, data)
     }
 
-    pub fn run<'a: 'b, 'b>(
+    pub fn runner<'a: 'b, 'b>(
         &'a self,
         command_encoder: &'b mut wgpu::CommandEncoder,
-        // this could be owned
         render_pass_descriptor: wgpu::RenderPassDescriptor<'b, '_>,
-    ) -> wgpu::RenderPass<'b> {
+    ) -> RenderNodeRunner<'a, 'b> {
         let mut render_pass = command_encoder.begin_render_pass(&render_pass_descriptor);
         render_pass.set_pipeline(&self.pipeline);
         self.uniform_bind_groups
@@ -163,6 +203,11 @@ impl RenderNode {
             .for_each(|(i, group)| {
                 render_pass.set_bind_group(i as u32, group.get_bind_group(), &[]);
             });
-        render_pass
+
+        RenderNodeRunner {
+            render_pass,
+            texture_types: &self.texture_types,
+            uniform_group_count: self.uniform_bind_groups.len() as u32,
+        }
     }
 }

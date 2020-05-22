@@ -81,8 +81,9 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
     let depth_texture = create_depth_texture(&device, &swap_chain_desc);
     let depth_texture_view = depth_texture.create_default_view();
     let mut swap_chain = device.create_swap_chain(&surface, &swap_chain_desc);
-    //let format = swap_chain_desc.format;
-    let cube = create_cube(&device);
+    let (cube, command_buffer) = create_cube(&device);
+    //let cube = create_cube(&device);
+    queue.submit(&[command_buffer]);
     let camera = Camera::new(
         Point3::new(0.0, 0.0, 0.0),
         Vector3::new(0.0, 0.0, -1.0),
@@ -119,6 +120,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                 .unwrap()
                 .build(&device),
         )
+        .add_texture::<SimpleTexture>(wgpu::ShaderStage::FRAGMENT)
         .build(&device, swap_chain_desc.format, DEPTH_FORMAT)
         .unwrap();
     event_loop.run(move |event, _, control_flow| {
@@ -154,19 +156,23 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                 let frame = swap_chain.get_next_texture().unwrap();
                 let mut encoder =
                     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-                render_node.update(
-                    &device,
-                    &mut encoder,
-                    0,
-                    &CameraGpuData::from(camera.clone()),
-                ).unwrap();
-                render_node.update(
-                    &device,
-                    &mut encoder,
-                    0,
-                    &RawModelInfo::from(model_info.clone()),
-                ).unwrap();
-                let mut pass = render_node.run(
+                render_node
+                    .update(
+                        &device,
+                        &mut encoder,
+                        0,
+                        &CameraGpuData::from(camera.clone()),
+                    )
+                    .unwrap();
+                render_node
+                    .update(
+                        &device,
+                        &mut encoder,
+                        0,
+                        &RawModelInfo::from(model_info.clone()),
+                    )
+                    .unwrap();
+                let mut runner = render_node.runner(
                     &mut encoder,
                     wgpu::RenderPassDescriptor {
                         color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
@@ -194,15 +200,18 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                         ),
                     },
                 );
-                cube.draw(&mut pass);
-                drop(pass);
+                runner.get_pass().set_vertex_buffer(0, &cube.vertices, 0, 0);
+                runner.get_pass().set_index_buffer(&cube.index_buf, 0, 0);
+                runner.set_texture_data(1, &cube.texture);
+                runner.get_pass().draw_indexed(0..cube.index_count, 0, 0..1);
+                drop(runner);
                 queue.submit(&[encoder.finish()]);
             }
             _ => {}
         }
     });
 }
-
+// TODO: SEGFAULT IF TEXTURE BINDGROUP ISNT ADDED TO PIPELINE??
 fn main() {
     let event_loop = EventLoop::new();
     let window = winit::window::WindowBuilder::new()
@@ -212,3 +221,13 @@ fn main() {
 
     futures::executor::block_on(run_example(event_loop, window));
 }
+/*
+render node runnder which accepts a vec of vertexbuffer data and texture data
+expects a list of drawable, that trait includes types of VertexBufferData and TextureData
+both are shit when a texture isn't connected to a vertex buffer eg shadow map
+
+render node runner which have equivalent methods as render pass but with typed methods,
+it keeps track of correct indexes as well
+self.set_vertex_buffer etc
+
+*/
