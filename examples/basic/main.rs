@@ -28,7 +28,6 @@ impl Camera {
         window_width: u32,
         window_height: u32,
     ) -> Self {
-        // what POINT should the camera look at?
         let view_target = position + direction;
         Camera {
             direction,
@@ -74,12 +73,14 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
         height: size.height as u32,
         present_mode: wgpu::PresentMode::Mailbox,
     };
+    
     let depth_texture = create_depth_texture(&device, &swap_chain_desc);
     let depth_texture_view = depth_texture.create_default_view();
     let mut swap_chain = device.create_swap_chain(&surface, &swap_chain_desc);
+    
     let (cube, command_buffer) = create_cube(&device);
-    //let cube = create_cube(&device);
     queue.submit(&[command_buffer]);
+
     let camera = Camera::new(
         Point3::new(0.0, 0.0, 0.0),
         Vector3::new(0.0, 0.0, -1.0),
@@ -95,14 +96,8 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
             &Vector3::y_axis(),
             0.3,
         ));
-    let vertex_shader = VertexShader::builder()
-        .set_shader_file("examples/basic/shader.vs")
-        .build(&device)
-        .unwrap();
-    let fragment_shader = FragmentShader::builder()
-        .set_shader_file("examples/basic/shader.fs")
-        .build(&device)
-        .unwrap();
+    let vertex_shader = VertexShader::new(&device, "examples/basic/shader.vs").unwrap();
+    let fragment_shader = FragmentShader::new(&device, "examples/basic/shader.fs").unwrap();
 
     let render_node = RenderNode::builder()
         .add_vertex_buffer::<Vertex>()
