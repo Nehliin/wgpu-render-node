@@ -34,7 +34,6 @@ pub struct VertexShader {
 }
 
 impl VertexShader {
-
     pub fn new(device: &wgpu::Device, path: impl AsRef<Path>) -> Result<VertexShader, RenderError> {
         let data = compile_glsl(path, ShaderType::Vertex)?;
         let module = device.create_shader_module(&data);
@@ -51,7 +50,10 @@ pub struct FragmentShader {
 }
 
 impl FragmentShader {
-    pub fn new(device: &wgpu::Device, path: impl AsRef<Path>) -> Result<FragmentShader, RenderError> {
+    pub fn new(
+        device: &wgpu::Device,
+        path: impl AsRef<Path>,
+    ) -> Result<FragmentShader, RenderError> {
         let data = compile_glsl(path.as_ref(), ShaderType::Fragment)?;
         let module = device.create_shader_module(&data);
         Ok(FragmentShader { module })
@@ -61,5 +63,3 @@ impl FragmentShader {
         get_descriptor(&self.module)
     }
 }
-
-

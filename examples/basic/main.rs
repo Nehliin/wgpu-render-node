@@ -73,11 +73,11 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
         height: size.height as u32,
         present_mode: wgpu::PresentMode::Mailbox,
     };
-    
+
     let depth_texture = create_depth_texture(&device, &swap_chain_desc);
     let depth_texture_view = depth_texture.create_default_view();
     let mut swap_chain = device.create_swap_chain(&surface, &swap_chain_desc);
-    
+
     let (cube, command_buffer) = create_cube(&device);
     queue.submit(&[command_buffer]);
 
