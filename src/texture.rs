@@ -17,13 +17,11 @@ pub trait Texture: 'static {
     ) -> &'static wgpu::BindGroupLayout;
 }
 
-// separate to SimpleTexture and simpleTexture data, same thing for vertexbuffers
-
 pub struct TextureData<T: Texture> {
     pub(crate) bind_group: wgpu::BindGroup,
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
-    sampler: wgpu::Sampler,
+    pub texture: wgpu::Texture,
+    pub view: wgpu::TextureView,
+    pub sampler: wgpu::Sampler,
     _marker: PhantomData<T>,
 }
 
