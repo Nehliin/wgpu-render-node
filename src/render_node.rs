@@ -2,7 +2,11 @@ use crate::{
     shader::{FragmentShader, VertexShader},
     uniforms::UniformBindGroup,
 };
-use crate::{texture::TextureData, GpuData, RenderError, Texture, vertex_buffer::{VertexData, VertexBuffer}};
+use crate::{
+    texture::TextureData,
+    vertex_buffer::{VertexBuffer, VertexData},
+    GpuData, RenderError, Texture,
+};
 use smallvec::SmallVec;
 use std::{
     any::TypeId,
@@ -13,6 +17,7 @@ const VERTX_BUFFER_STACK_LIMIT: usize = 3;
 
 pub struct RenderNode {
     uniform_bind_groups: Vec<UniformBindGroup>,
+    vertex_buffer_types: SmallVec<[TypeId; VERTX_BUFFER_STACK_LIMIT]>,
     texture_types: Vec<TypeId>,
     pipeline: wgpu::RenderPipeline,
 }
@@ -20,6 +25,7 @@ pub struct RenderNode {
 pub struct RenderNodeRunner<'a, 'b: 'a> {
     render_pass: wgpu::RenderPass<'a>,
     texture_types: &'b Vec<TypeId>,
+    vertex_buffer_types: &'b SmallVec<[TypeId; VERTX_BUFFER_STACK_LIMIT]>,
     uniform_group_count: u32,
 }
 
@@ -34,9 +40,10 @@ impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
     }
 
     #[inline]
-    pub fn set_vertex_buffer_data<D: VertexBuffer>(&mut self, data: &'b VertexData<D>) {
-        //dbg!(D::get_descriptor());  
-        self.render_pass.set_vertex_buffer(0, &data.buffer, 0, 0);
+    pub fn set_vertex_buffer_data<D: VertexBuffer>(&mut self, index: u32, data: &'b VertexData<D>) {
+        assert!(TypeId::of::<D>() == self.vertex_buffer_types[index as usize]);
+        self.render_pass
+            .set_vertex_buffer(index, &data.buffer, 0, 0);
     }
 }
 
@@ -55,8 +62,9 @@ impl<'a> DerefMut for RenderNodeRunner<'a, '_> {
 
 #[derive(Default)]
 pub struct RenderNodeBuilder<'a> {
-    vertex_buffers:
-        SmallVec<[(TypeId, wgpu::VertexBufferDescriptor<'a>); VERTX_BUFFER_STACK_LIMIT]>,
+    vertex_buffer_types: SmallVec<[TypeId; VERTX_BUFFER_STACK_LIMIT]>,
+    vertex_buffer_descriptors:
+        SmallVec<[wgpu::VertexBufferDescriptor<'a>; VERTX_BUFFER_STACK_LIMIT]>,
     uniform_bind_groups: Vec<UniformBindGroup>,
     vertex_shader: Option<VertexShader>,
     fragment_shader: Option<FragmentShader>,
@@ -66,8 +74,8 @@ pub struct RenderNodeBuilder<'a> {
 
 impl<'a> RenderNodeBuilder<'a> {
     pub fn add_vertex_buffer<VB: VertexBuffer>(mut self) -> Self {
-        self.vertex_buffers
-            .push((TypeId::of::<VB>(), VB::get_descriptor()));
+        self.vertex_buffer_types.push(TypeId::of::<VB>());
+        self.vertex_buffer_descriptors.push(VB::get_descriptor());
         self
     }
 
@@ -118,12 +126,6 @@ impl<'a> RenderNodeBuilder<'a> {
                 bind_group_layouts: &bind_group_layouts,
             });
 
-        let vertex_buffer_desc = &self
-            .vertex_buffers
-            .iter()
-            .map(|(_, descriptor)| descriptor.clone())
-            .collect::<Vec<wgpu::VertexBufferDescriptor>>();
-
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &render_pipeline_layout,
             vertex_stage: self.vertex_shader.as_ref().unwrap().get_descriptor(),
@@ -157,7 +159,7 @@ impl<'a> RenderNodeBuilder<'a> {
             }),
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint32,
-                vertex_buffers: &vertex_buffer_desc,
+                vertex_buffers: &self.vertex_buffer_descriptors,
             },
             sample_count: 1,
             sample_mask: !0,
@@ -179,6 +181,7 @@ impl<'a> RenderNodeBuilder<'a> {
                 uniform_bind_groups: self.uniform_bind_groups,
                 pipeline,
                 texture_types: self.texture_types,
+                vertex_buffer_types: self.vertex_buffer_types,
             })
         }
     }
@@ -187,7 +190,8 @@ impl<'a> RenderNodeBuilder<'a> {
 impl RenderNode {
     pub fn builder<'a>() -> RenderNodeBuilder<'a> {
         RenderNodeBuilder {
-            vertex_buffers: SmallVec::new(),
+            vertex_buffer_types: SmallVec::new(),
+            vertex_buffer_descriptors: SmallVec::new(),
             vertex_shader: None,
             fragment_shader: None,
             uniform_bind_groups: Vec::new(),
@@ -224,6 +228,7 @@ impl RenderNode {
         RenderNodeRunner {
             render_pass,
             texture_types: &self.texture_types,
+            vertex_buffer_types: &self.vertex_buffer_types,
             uniform_group_count: self.uniform_bind_groups.len() as u32,
         }
     }
