@@ -3,14 +3,13 @@ use image::GenericImage;
 use once_cell::sync::OnceCell;
 use std::{marker::PhantomData, path::Path};
 
-pub trait Texture: 'static {
+pub trait Texture: 'static + Sized {
     fn load(
         device: &wgpu::Device,
         path: impl AsRef<Path>,
         visibility: wgpu::ShaderStage,
-    ) -> Result<(TextureData<Self>, wgpu::CommandBuffer), RenderError>
-    where
-        Self: std::marker::Sized;
+    ) -> Result<(TextureData<Self>, wgpu::CommandBuffer), RenderError>;
+
     fn get_or_create_layout(
         device: &wgpu::Device,
         visibility: wgpu::ShaderStage,

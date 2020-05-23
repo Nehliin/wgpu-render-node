@@ -3,6 +3,7 @@ use crate::{ModelInfo};
 use smol_renderer::*;
 use texture::TextureData;
 use nalgebra::{Vector3, Point3};
+use vertex_buffer::{VertexData, VertexBuffer};
 
 
 #[repr(C)]
@@ -104,7 +105,7 @@ fn vertex(position: [i8; 3], tc: [i8; 2]) -> Vertex {
 }
 
 
-impl VertexBufferData for Vertex {
+impl VertexBuffer for Vertex {
     fn get_descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a> {
         wgpu::VertexBufferDescriptor {
             stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
@@ -115,7 +116,7 @@ impl VertexBufferData for Vertex {
 }
 
 pub struct Cube {
-    pub vertices: wgpu::Buffer,
+    pub vertices: VertexData<Vertex>,
     pub index_buf: wgpu::Buffer,
     pub texture: TextureData<SimpleTexture>,
     pub index_count: u32,
@@ -155,12 +156,7 @@ pub fn create_cube(device: &wgpu::Device) -> (Cube, wgpu::CommandBuffer) {
         vertex([-1, -1, -1], [1, 1]),
         vertex([1, -1, -1], [0, 1]),
     ];
-    let bytes = vertex_data
-        .iter()
-        .map(GpuData::as_raw_bytes)
-        .flatten()
-        .copied()
-        .collect::<Vec<u8>>();
+    let vertex_data = VertexBuffer::allocate_buffer(device, &vertex_data);
     // index data format defaults to u32
     let index_data: &[u32] = &[
         0, 1, 2, 2, 3, 0, // top
@@ -176,7 +172,7 @@ pub fn create_cube(device: &wgpu::Device) -> (Cube, wgpu::CommandBuffer) {
     };
     let (texture, command_buffer) = SimpleTexture::load(&device, "examples/basic/cube-diffuse.png", wgpu::ShaderStage::FRAGMENT).unwrap();
     (Cube {
-        vertices: device.create_buffer_with_data(bytes.as_slice(), wgpu::BufferUsage::VERTEX),
+        vertices: vertex_data,
         index_buf: device.create_buffer_with_data(index_data, wgpu::BufferUsage::INDEX),
         index_count,
         texture,

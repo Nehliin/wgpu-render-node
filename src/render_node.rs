@@ -2,9 +2,12 @@ use crate::{
     shader::{FragmentShader, VertexShader},
     uniforms::UniformBindGroup,
 };
-use crate::{texture::TextureData, GpuData, RenderError, Texture, VertexBufferData};
+use crate::{texture::TextureData, GpuData, RenderError, Texture, vertex_buffer::{VertexData, VertexBuffer}};
 use smallvec::SmallVec;
-use std::{ops::{DerefMut, Deref}, any::TypeId};
+use std::{
+    any::TypeId,
+    ops::{Deref, DerefMut},
+};
 
 const VERTX_BUFFER_STACK_LIMIT: usize = 3;
 
@@ -20,12 +23,20 @@ pub struct RenderNodeRunner<'a, 'b: 'a> {
     uniform_group_count: u32,
 }
 
-impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {    
+impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
     #[inline]
     pub fn set_texture_data<T: Texture>(&mut self, index: u32, data: &'b TextureData<T>) {
-        assert!(TypeId::of::<T>() == self.texture_types[(index - self.uniform_group_count) as usize]);
-            self.render_pass
-                .set_bind_group(index, &data.bind_group, &[]); 
+        assert!(
+            TypeId::of::<T>() == self.texture_types[(index - self.uniform_group_count) as usize]
+        );
+        self.render_pass
+            .set_bind_group(index, &data.bind_group, &[]);
+    }
+
+    #[inline]
+    pub fn set_vertex_buffer_data<D: VertexBuffer>(&mut self, data: &'b VertexData<D>) {
+        //dbg!(D::get_descriptor());  
+        self.render_pass.set_vertex_buffer(0, &data.buffer, 0, 0);
     }
 }
 
@@ -36,12 +47,11 @@ impl<'a> Deref for RenderNodeRunner<'a, '_> {
     }
 }
 
-impl<'a> DerefMut for RenderNodeRunner<'a,'_> {
+impl<'a> DerefMut for RenderNodeRunner<'a, '_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-       &mut self.render_pass 
-    }    
+        &mut self.render_pass
+    }
 }
-
 
 #[derive(Default)]
 pub struct RenderNodeBuilder<'a> {
@@ -51,12 +61,11 @@ pub struct RenderNodeBuilder<'a> {
     vertex_shader: Option<VertexShader>,
     fragment_shader: Option<FragmentShader>,
     texture_types: Vec<TypeId>,
-    texture_layout_generators:
-        Vec<Box<dyn Fn(&wgpu::Device) -> &'static wgpu::BindGroupLayout>>,
+    texture_layout_generators: Vec<Box<dyn Fn(&wgpu::Device) -> &'static wgpu::BindGroupLayout>>,
 }
 
 impl<'a> RenderNodeBuilder<'a> {
-    pub fn add_vertex_buffer<VB: VertexBufferData>(mut self) -> Self {
+    pub fn add_vertex_buffer<VB: VertexBuffer>(mut self) -> Self {
         self.vertex_buffers
             .push((TypeId::of::<VB>(), VB::get_descriptor()));
         self
@@ -69,7 +78,10 @@ impl<'a> RenderNodeBuilder<'a> {
 
     pub fn add_texture<T: Texture>(mut self, visibility: wgpu::ShaderStage) -> Self {
         self.texture_types.push(TypeId::of::<T>());
-        self.texture_layout_generators.push(Box::new(move |device: &wgpu::Device|  T::get_or_create_layout(device, visibility)));
+        self.texture_layout_generators
+            .push(Box::new(move |device: &wgpu::Device| {
+                T::get_or_create_layout(device, visibility)
+            }));
         self
     }
 
@@ -89,7 +101,6 @@ impl<'a> RenderNodeBuilder<'a> {
         color_format: wgpu::TextureFormat,
         depth_format: wgpu::TextureFormat,
     ) -> wgpu::RenderPipeline {
-        
         let texture_layouts = self
             .texture_layout_generators
             .iter()

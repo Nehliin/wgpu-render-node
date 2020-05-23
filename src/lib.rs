@@ -2,6 +2,7 @@ pub mod render_node;
 pub mod shader;
 pub mod texture;
 pub mod uniforms;
+pub mod vertex_buffer;
 
 use std::path::PathBuf;
 use thiserror::Error;
@@ -11,11 +12,8 @@ pub use shader::{FragmentShader, VertexShader};
 pub use smol_renderer_derive::*;
 pub use texture::{SimpleTexture, Texture};
 pub use uniforms::{UniformBindGroup, UniformBindGroupBuilder};
-pub unsafe trait GpuData: 'static {
-    fn as_raw_bytes(&self) -> &[u8]
-    where
-        Self: std::marker::Sized,
-    {
+pub unsafe trait GpuData: 'static + Sized {
+    fn as_raw_bytes(&self) -> &[u8] {
         unsafe {
             std::slice::from_raw_parts(
                 self as *const Self as *const u8,
@@ -23,10 +21,6 @@ pub unsafe trait GpuData: 'static {
             )
         }
     }
-}
-// TODO: Add index format associated type to this trait
-pub trait VertexBufferData: GpuData {
-    fn get_descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a>;
 }
 
 #[derive(Error, Debug)]

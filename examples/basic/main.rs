@@ -191,7 +191,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                         ),
                     },
                 );
-                runner.set_vertex_buffer(0, &cube.vertices, 0, 0);
+                runner.set_vertex_buffer_data(&cube.vertices);
                 runner.set_index_buffer(&cube.index_buf, 0, 0);
                 runner.set_texture_data(1, &cube.texture);
                 runner.draw_indexed(0..cube.index_count, 0, 0..1);
