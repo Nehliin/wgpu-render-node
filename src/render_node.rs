@@ -4,7 +4,7 @@ use crate::{
 };
 use crate::{texture::TextureData, GpuData, RenderError, Texture, VertexBufferData};
 use smallvec::SmallVec;
-use std::any::TypeId;
+use std::{ops::{DerefMut, Deref}, any::TypeId};
 
 const VERTX_BUFFER_STACK_LIMIT: usize = 3;
 
@@ -20,21 +20,28 @@ pub struct RenderNodeRunner<'a, 'b: 'a> {
     uniform_group_count: u32,
 }
 
-impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
+impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {    
+    #[inline]
     pub fn set_texture_data<T: Texture>(&mut self, index: u32, data: &'b TextureData<T>) {
-        // could be a debug assert
-        if TypeId::of::<T>() == self.texture_types[(index - self.uniform_group_count) as usize] {
+        assert!(TypeId::of::<T>() == self.texture_types[(index - self.uniform_group_count) as usize]);
             self.render_pass
-                .set_bind_group(index, &data.bind_group, &[]);
-        } else {
-            println!("Det sket sig");
-        }
-    }
-
-    pub fn get_pass(&mut self) -> &mut wgpu::RenderPass<'a> {
-        &mut self.render_pass
+                .set_bind_group(index, &data.bind_group, &[]); 
     }
 }
+
+impl<'a> Deref for RenderNodeRunner<'a, '_> {
+    type Target = wgpu::RenderPass<'a>;
+    fn deref(&self) -> &Self::Target {
+        &self.render_pass
+    }
+}
+
+impl<'a> DerefMut for RenderNodeRunner<'a,'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+       &mut self.render_pass 
+    }    
+}
+
 
 #[derive(Default)]
 pub struct RenderNodeBuilder<'a> {
@@ -45,7 +52,7 @@ pub struct RenderNodeBuilder<'a> {
     fragment_shader: Option<FragmentShader>,
     texture_types: Vec<TypeId>,
     texture_layout_generators:
-        Vec<Box<dyn Fn(&wgpu::Device, wgpu::ShaderStage) -> &'static wgpu::BindGroupLayout>>,
+        Vec<Box<dyn Fn(&wgpu::Device) -> &'static wgpu::BindGroupLayout>>,
 }
 
 impl<'a> RenderNodeBuilder<'a> {
@@ -62,8 +69,7 @@ impl<'a> RenderNodeBuilder<'a> {
 
     pub fn add_texture<T: Texture>(mut self, visibility: wgpu::ShaderStage) -> Self {
         self.texture_types.push(TypeId::of::<T>());
-        self.texture_layout_generators
-            .push(Box::new(T::get_or_create_layout));
+        self.texture_layout_generators.push(Box::new(move |device: &wgpu::Device|  T::get_or_create_layout(device, visibility)));
         self
     }
 
@@ -87,7 +93,7 @@ impl<'a> RenderNodeBuilder<'a> {
         let texture_layouts = self
             .texture_layout_generators
             .iter()
-            .map(|gen| gen(&device, wgpu::ShaderStage::FRAGMENT));
+            .map(|gen| gen(&device));
 
         let bind_group_layouts = self
             .uniform_bind_groups
