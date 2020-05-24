@@ -24,6 +24,23 @@ pub struct TextureData<T: Texture> {
     _marker: PhantomData<T>,
 }
 
+impl<T: Texture> TextureData<T> {
+    pub fn new(
+        bind_group: wgpu::BindGroup,
+        texture: wgpu::Texture,
+        view: wgpu::TextureView,
+        sampler: wgpu::Sampler,
+    ) -> Self {
+        TextureData {
+            bind_group,
+            texture,
+            view,
+            sampler,
+            _marker: PhantomData::default(),
+        }
+    }
+}
+
 pub struct SimpleTexture;
 
 impl Texture for SimpleTexture {
