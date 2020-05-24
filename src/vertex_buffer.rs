@@ -32,7 +32,7 @@ impl<T: VertexBuffer> VertexBufferData for MutableVertexData<T> {
     }
 }
 
-impl<T: GpuData> MutableVertexData<T> {
+impl<T: VertexBuffer> MutableVertexData<T> {
     fn update(&self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, buffer_data: &[T]) {
         let raw_bytes = buffer_data
             .iter()
