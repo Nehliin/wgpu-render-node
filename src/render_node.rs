@@ -4,7 +4,7 @@ use crate::{
 };
 use crate::{
     texture::TextureData,
-    vertex_buffer::{VertexBuffer, VertexData},
+    vertex_buffer::{VertexBuffer, ImmutableVertexData, MutableVertexData, VertexBufferData},
     GpuData, RenderError, Texture,
 };
 use smallvec::SmallVec;
@@ -40,10 +40,10 @@ impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
     }
 
     #[inline]
-    pub fn set_vertex_buffer_data<D: VertexBuffer>(&mut self, index: u32, data: &'b VertexData<D>) {
+    pub fn set_vertex_buffer_data<D: VertexBuffer>(&mut self, index: u32, data: &'b impl VertexBufferData<DataType = D>) {
         assert!(TypeId::of::<D>() == self.vertex_buffer_types[index as usize]);
         self.render_pass
-            .set_vertex_buffer(index, &data.buffer, 0, 0);
+            .set_vertex_buffer(index, data.get_gpu_buffer(), 0, 0);
     }
 }
 

@@ -7,7 +7,7 @@ pub mod vertex_buffer;
 use std::path::PathBuf;
 use thiserror::Error;
 
-pub use vertex_buffer::{VertexBuffer, VertexData};
+pub use vertex_buffer::{VertexBuffer, MutableVertexData, ImmutableVertexData};
 pub use render_node::{RenderNode, RenderNodeBuilder, RenderNodeRunner};
 pub use shader::{FragmentShader, VertexShader};
 pub use smol_renderer_derive::*;

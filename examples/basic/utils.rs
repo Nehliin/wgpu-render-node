@@ -3,7 +3,7 @@ use crate::ModelInfo;
 use nalgebra::{Point3, Vector3};
 use smol_renderer::*;
 use texture::TextureData;
-use vertex_buffer::{VertexBuffer, VertexData};
+use vertex_buffer::{VertexBuffer, ImmutableVertexData};
 
 #[repr(C)]
 #[derive(GpuData)]
@@ -103,17 +103,15 @@ fn vertex(position: [i8; 3], tc: [i8; 2]) -> Vertex {
 }
 
 impl VertexBuffer for Vertex {
-    fn get_descriptor<'a>() -> wgpu::VertexBufferDescriptor<'a> {
-        wgpu::VertexBufferDescriptor {
-            stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::InputStepMode::Vertex,
-            attributes: &wgpu::vertex_attr_array![0 => Float3, 1 => Float2],
-        }
+    const STEP_MODE: wgpu::InputStepMode = wgpu::InputStepMode::Vertex;
+
+    fn get_attributes<'a>() -> &'a [wgpu::VertexAttributeDescriptor] {
+        &wgpu::vertex_attr_array![0 => Float3, 1 => Float2]
     }
 }
 
 pub struct Cube {
-    pub vertices: VertexData<Vertex>,
+    pub vertices: ImmutableVertexData<Vertex>,
     pub index_buf: wgpu::Buffer,
     pub texture: TextureData<SimpleTexture>,
     pub index_count: u32,
@@ -152,7 +150,7 @@ pub fn create_cube(device: &wgpu::Device) -> (Cube, wgpu::CommandBuffer) {
         vertex([-1, -1, -1], [1, 1]),
         vertex([1, -1, -1], [0, 1]),
     ];
-    let vertex_data = VertexBuffer::allocate_buffer(device, &vertex_data);
+    let vertex_data = VertexBuffer::allocate_immutable_buffer(device, &vertex_data);
     // index data format defaults to u32
     let index_data: &[u32] = &[
         0, 1, 2, 2, 3, 0, // top
