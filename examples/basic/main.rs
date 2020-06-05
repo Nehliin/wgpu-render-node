@@ -103,7 +103,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
         .add_vertex_buffer::<Vertex>()
         .set_vertex_shader(vertex_shader)
         .set_fragment_shader(fragment_shader)
-        .add_uniform_bind_group(
+        .add_local_uniform_bind_group(
             UniformBindGroup::builder()
                 .add_binding::<CameraGpuData>(wgpu::ShaderStage::VERTEX)
                 .unwrap()

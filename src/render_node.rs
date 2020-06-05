@@ -11,12 +11,14 @@ use smallvec::SmallVec;
 use std::{
     any::TypeId,
     ops::{Deref, DerefMut},
+    sync::Arc,
 };
 
 const VERTX_BUFFER_STACK_LIMIT: usize = 3;
 
 pub struct RenderNode {
-    uniform_bind_groups: Vec<UniformBindGroup>,
+    shared_uniform_bind_groups: Vec<Arc<UniformBindGroup>>,
+    local_uniform_bind_groups: Vec<UniformBindGroup>,
     vertex_buffer_types: SmallVec<[TypeId; VERTX_BUFFER_STACK_LIMIT]>,
     texture_types: Vec<TypeId>,
     pipeline: wgpu::RenderPipeline,
@@ -69,7 +71,8 @@ pub struct RenderNodeBuilder<'a> {
     vertex_buffer_types: SmallVec<[TypeId; VERTX_BUFFER_STACK_LIMIT]>,
     vertex_buffer_descriptors:
         SmallVec<[wgpu::VertexBufferDescriptor<'a>; VERTX_BUFFER_STACK_LIMIT]>,
-    uniform_bind_groups: Vec<UniformBindGroup>,
+    local_uniform_bind_groups: Vec<UniformBindGroup>,
+    shared_uniform_bind_groups: Vec<Arc<UniformBindGroup>>,
     vertex_shader: Option<VertexShader>,
     fragment_shader: Option<FragmentShader>,
     depth_stencil_desc: Option<wgpu::DepthStencilStateDescriptor>,
@@ -85,8 +88,13 @@ impl<'a> RenderNodeBuilder<'a> {
         self
     }
 
-    pub fn add_uniform_bind_group(mut self, uniform: UniformBindGroup) -> Self {
-        self.uniform_bind_groups.push(uniform);
+    pub fn add_local_uniform_bind_group(mut self, uniform: UniformBindGroup) -> Self {
+        self.local_uniform_bind_groups.push(uniform);
+        self
+    }
+
+    pub fn add_shared_uniform_bind_group(mut self, shared_uniform: Arc<UniformBindGroup>) -> Self {
+        self.shared_uniform_bind_groups.push(shared_uniform);
         self
     }
 
@@ -153,16 +161,22 @@ impl<'a> RenderNodeBuilder<'a> {
             .iter()
             .map(|gen| gen(&device));
 
-        let bind_group_layouts = self
-            .uniform_bind_groups
+        let local_bind_group_layouts = self
+            .local_uniform_bind_groups
             .iter()
-            .map(UniformBindGroup::get_layout)
+            .map(UniformBindGroup::get_layout);
+
+        let shared_bind_group_layouts = self
+            .shared_uniform_bind_groups
+            .iter()
+            .map(|group| group.get_layout())
+            .chain(local_bind_group_layouts)
             .chain(texture_layouts)
             .collect::<Vec<&wgpu::BindGroupLayout>>();
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &bind_group_layouts,
+                bind_group_layouts: &shared_bind_group_layouts,
             });
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -201,7 +215,8 @@ impl<'a> RenderNodeBuilder<'a> {
         } else {
             let pipeline = self.construct_pipeline(device, color_format);
             Ok(RenderNode {
-                uniform_bind_groups: self.uniform_bind_groups,
+                shared_uniform_bind_groups: self.shared_uniform_bind_groups,
+                local_uniform_bind_groups: self.local_uniform_bind_groups,
                 pipeline,
                 texture_types: self.texture_types,
                 vertex_buffer_types: self.vertex_buffer_types,
@@ -217,7 +232,8 @@ impl RenderNode {
             vertex_buffer_descriptors: SmallVec::new(),
             vertex_shader: None,
             fragment_shader: None,
-            uniform_bind_groups: Vec::new(),
+            shared_uniform_bind_groups: Vec::new(),
+            local_uniform_bind_groups: Vec::new(),
             rasterization_state_desc: None,
             depth_stencil_desc: None,
             texture_layout_generators: Vec::new(),
@@ -233,7 +249,11 @@ impl RenderNode {
         bind_group_index: usize,
         data: &impl GpuData,
     ) -> Result<(), RenderError> {
-        self.uniform_bind_groups[bind_group_index].update_buffer_data(device, command_encoder, data)
+        self.local_uniform_bind_groups[bind_group_index].update_buffer_data(
+            device,
+            command_encoder,
+            data,
+        )
     }
 
     pub fn runner<'a: 'b, 'b>(
@@ -243,8 +263,11 @@ impl RenderNode {
     ) -> RenderNodeRunner<'a, 'b> {
         let mut render_pass = command_encoder.begin_render_pass(&render_pass_descriptor);
         render_pass.set_pipeline(&self.pipeline);
-        self.uniform_bind_groups
+        let local_iter = self.local_uniform_bind_groups.iter();
+        self.shared_uniform_bind_groups
             .iter()
+            .map(|shared| shared.deref())
+            .chain(local_iter)
             .enumerate()
             .for_each(|(i, group)| {
                 render_pass.set_bind_group(i as u32, group.get_bind_group(), &[]);
@@ -254,7 +277,7 @@ impl RenderNode {
             render_pass,
             texture_types: &self.texture_types,
             vertex_buffer_types: &self.vertex_buffer_types,
-            uniform_group_count: self.uniform_bind_groups.len() as u32,
+            uniform_group_count: self.local_uniform_bind_groups.len() as u32,
         }
     }
 }
