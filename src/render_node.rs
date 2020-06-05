@@ -4,7 +4,7 @@ use crate::{
 };
 use crate::{
     texture::TextureData,
-    vertex_buffer::{VertexBuffer, ImmutableVertexData, MutableVertexData, VertexBufferData},
+    vertex_buffer::{VertexBuffer, VertexBufferData},
     GpuData, RenderError, Texture,
 };
 use smallvec::SmallVec;
@@ -40,7 +40,11 @@ impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
     }
 
     #[inline]
-    pub fn set_vertex_buffer_data<D: VertexBuffer>(&mut self, index: u32, data: &'b impl VertexBufferData<DataType = D>) {
+    pub fn set_vertex_buffer_data<D: VertexBuffer>(
+        &mut self,
+        index: u32,
+        data: &'b impl VertexBufferData<DataType = D>,
+    ) {
         assert!(TypeId::of::<D>() == self.vertex_buffer_types[index as usize]);
         self.render_pass
             .set_vertex_buffer(index, data.get_gpu_buffer(), 0, 0);
@@ -68,6 +72,8 @@ pub struct RenderNodeBuilder<'a> {
     uniform_bind_groups: Vec<UniformBindGroup>,
     vertex_shader: Option<VertexShader>,
     fragment_shader: Option<FragmentShader>,
+    depth_stencil_desc: Option<wgpu::DepthStencilStateDescriptor>,
+    rasterization_state_desc: Option<wgpu::RasterizationStateDescriptor>,
     texture_types: Vec<TypeId>,
     texture_layout_generators: Vec<Box<dyn Fn(&wgpu::Device) -> &'static wgpu::BindGroupLayout>>,
 }
@@ -103,11 +109,44 @@ impl<'a> RenderNodeBuilder<'a> {
         self
     }
 
+    pub fn set_default_rasterization_state(mut self) -> Self {
+        self.rasterization_state_desc = Some(wgpu::RasterizationStateDescriptor {
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: wgpu::CullMode::Back,
+            depth_bias: 0,
+            depth_bias_slope_scale: 0.0,
+            depth_bias_clamp: 0.0,
+        });
+        self
+    }
+
+    pub fn set_rasterization_state(mut self, desc: wgpu::RasterizationStateDescriptor) -> Self {
+        self.rasterization_state_desc = Some(desc);
+        self
+    }
+
+    pub fn set_default_depth_stencil_state(mut self) -> Self {
+        self.depth_stencil_desc = Some(wgpu::DepthStencilStateDescriptor {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
+            stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
+            stencil_read_mask: 0,
+            stencil_write_mask: 0,
+        });
+        self
+    }
+
+    pub fn set_depth_stencil_state(mut self, desc: wgpu::DepthStencilStateDescriptor) -> Self {
+        self.depth_stencil_desc = Some(desc);
+        self
+    }
+
     fn construct_pipeline(
-        &self,
+        &mut self,
         device: &wgpu::Device,
         color_format: wgpu::TextureFormat,
-        depth_format: wgpu::TextureFormat,
     ) -> wgpu::RenderPipeline {
         let texture_layouts = self
             .texture_layout_generators
@@ -133,14 +172,7 @@ impl<'a> RenderNodeBuilder<'a> {
                 .fragment_shader
                 .as_ref()
                 .map(FragmentShader::get_descriptor),
-            // TODO: add customizable rasterization stage
-            rasterization_state: Some(wgpu::RasterizationStateDescriptor {
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: wgpu::CullMode::Back,
-                depth_bias: 0,
-                depth_bias_slope_scale: 0.0,
-                depth_bias_clamp: 0.0,
-            }),
+            rasterization_state: std::mem::replace(&mut self.rasterization_state_desc, None),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
             color_states: &[wgpu::ColorStateDescriptor {
                 format: color_format,
@@ -148,15 +180,7 @@ impl<'a> RenderNodeBuilder<'a> {
                 color_blend: wgpu::BlendDescriptor::REPLACE,
                 write_mask: wgpu::ColorWrite::ALL,
             }],
-            depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
-                format: depth_format,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
-                stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
-                stencil_read_mask: 0,
-                stencil_write_mask: 0,
-            }),
+            depth_stencil_state: std::mem::replace(&mut self.depth_stencil_desc, None),
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint32,
                 vertex_buffers: &self.vertex_buffer_descriptors,
@@ -168,15 +192,14 @@ impl<'a> RenderNodeBuilder<'a> {
     }
 
     pub fn build(
-        self,
+        mut self,
         device: &wgpu::Device,
         color_format: wgpu::TextureFormat,
-        depth_format: wgpu::TextureFormat,
     ) -> Result<RenderNode, RenderError> {
         if self.vertex_shader.is_none() {
             Err(RenderError::MissingVertexShader)
         } else {
-            let pipeline = self.construct_pipeline(device, color_format, depth_format);
+            let pipeline = self.construct_pipeline(device, color_format);
             Ok(RenderNode {
                 uniform_bind_groups: self.uniform_bind_groups,
                 pipeline,
@@ -195,6 +218,8 @@ impl RenderNode {
             vertex_shader: None,
             fragment_shader: None,
             uniform_bind_groups: Vec::new(),
+            rasterization_state_desc: None,
+            depth_stencil_desc: None,
             texture_layout_generators: Vec::new(),
             texture_types: Vec::new(),
         }

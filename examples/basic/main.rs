@@ -112,7 +112,9 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                 .build(&device),
         )
         .add_texture::<SimpleTexture>(wgpu::ShaderStage::FRAGMENT)
-        .build(&device, swap_chain_desc.format, DEPTH_FORMAT)
+        .set_default_rasterization_state()
+        .set_default_depth_stencil_state()
+        .build(&device, swap_chain_desc.format)
         .unwrap();
     event_loop.run(move |event, _, control_flow| {
         let _ = (
@@ -202,7 +204,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
         }
     });
 }
-// TODO: SEGFAULT IF TEXTURE BINDGROUP ISNT ADDED TO PIPELINE??
+
 fn main() {
     let event_loop = EventLoop::new();
     let window = winit::window::WindowBuilder::new()
@@ -212,13 +214,3 @@ fn main() {
 
     futures::executor::block_on(run_example(event_loop, window));
 }
-/*
-render node runnder which accepts a vec of vertexbuffer data and texture data
-expects a list of drawable, that trait includes types of VertexBufferData and TextureData
-both are shit when a texture isn't connected to a vertex buffer eg shadow map
-
-render node runner which have equivalent methods as render pass but with typed methods,
-it keeps track of correct indexes as well
-self.set_vertex_buffer etc
-
-*/
