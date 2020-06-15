@@ -3,6 +3,7 @@ pub mod shader;
 pub mod texture;
 pub mod uniforms;
 pub mod vertex_buffer;
+pub mod frame_buffer;
 
 use std::path::PathBuf;
 use thiserror::Error;
