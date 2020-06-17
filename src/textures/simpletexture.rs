@@ -1,60 +1,19 @@
-use crate::RenderError;
+use super::{LoadableTexture, TextureData, TextureShaderLayout};
 use image::GenericImage;
 use once_cell::sync::OnceCell;
-use std::{marker::PhantomData, path::Path};
-
-pub trait Texture: 'static + Sized {
-    fn load(
-        device: &wgpu::Device,
-        path: impl AsRef<Path>,
-        visibility: wgpu::ShaderStage,
-    ) -> Result<(TextureData<Self>, wgpu::CommandBuffer), RenderError>;
-
-    fn get_or_create_layout(
-        device: &wgpu::Device,
-        visibility: wgpu::ShaderStage,
-    ) -> &'static wgpu::BindGroupLayout;
-}
-
-pub struct TextureData<T: Texture> {
-    pub(crate) bind_group: wgpu::BindGroup,
-    pub texture: wgpu::Texture,
-    pub view: wgpu::TextureView,
-    pub sampler: wgpu::Sampler,
-    _marker: PhantomData<T>,
-}
-
-impl<T: Texture> TextureData<T> {
-    pub fn new(
-        bind_group: wgpu::BindGroup,
-        texture: wgpu::Texture,
-        view: wgpu::TextureView,
-        sampler: wgpu::Sampler,
-    ) -> Self {
-        TextureData {
-            bind_group,
-            texture,
-            view,
-            sampler,
-            _marker: PhantomData::default(),
-        }
-    }
-}
-
+use std::marker::PhantomData;
 pub struct SimpleTexture;
 
-impl Texture for SimpleTexture {
-    fn get_or_create_layout(
-        device: &wgpu::Device,
-        visibility: wgpu::ShaderStage,
-    ) -> &'static wgpu::BindGroupLayout {
+impl TextureShaderLayout for SimpleTexture {
+    const VISIBILITY: wgpu::ShaderStage = wgpu::ShaderStage::FRAGMENT;
+    fn get_layout(device: &wgpu::Device) -> &'static wgpu::BindGroupLayout {
         static LAYOUT: OnceCell<wgpu::BindGroupLayout> = OnceCell::new();
         LAYOUT.get_or_init(move || {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 bindings: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility,
+                        visibility: Self::VISIBILITY,
                         ty: wgpu::BindingType::SampledTexture {
                             dimension: wgpu::TextureViewDimension::D2,
                             component_type: wgpu::TextureComponentType::Float,
@@ -63,7 +22,7 @@ impl Texture for SimpleTexture {
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
-                        visibility,
+                        visibility: Self::VISIBILITY,
                         ty: wgpu::BindingType::Sampler { comparison: true },
                     },
                 ],
@@ -71,12 +30,13 @@ impl Texture for SimpleTexture {
             })
         })
     }
+}
 
-    fn load(
+impl LoadableTexture for SimpleTexture {
+    fn load_texture(
         device: &wgpu::Device,
-        path: impl AsRef<Path>,
-        visibility: wgpu::ShaderStage,
-    ) -> Result<(TextureData<SimpleTexture>, wgpu::CommandBuffer), RenderError> {
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<(super::TextureData<Self>, wgpu::CommandBuffer), crate::RenderError> {
         let img = image::open(path)?;
         let img = img.flipv();
 
@@ -139,7 +99,7 @@ impl Texture for SimpleTexture {
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &Self::get_or_create_layout(device, visibility),
+            layout: &Self::get_layout(device),
             bindings: &[
                 wgpu::Binding {
                     binding: 0,
@@ -155,7 +115,7 @@ impl Texture for SimpleTexture {
         let texture_data = TextureData {
             bind_group,
             sampler,
-            view,
+            views: vec![view],
             texture,
             _marker: PhantomData::default(),
         };

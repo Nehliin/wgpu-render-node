@@ -111,7 +111,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                 .unwrap()
                 .build(&device),
         )
-        .add_texture::<SimpleTexture>(wgpu::ShaderStage::FRAGMENT)
+        .add_texture::<SimpleTexture>()
         .set_default_rasterization_state()
         .set_default_depth_stencil_state()
         .build(&device, swap_chain_desc.format)

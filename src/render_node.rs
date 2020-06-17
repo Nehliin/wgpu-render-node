@@ -3,9 +3,9 @@ use crate::{
     uniforms::UniformBindGroup,
 };
 use crate::{
-    texture::TextureData,
+    textures::TextureData,
     vertex_buffer::{VertexBuffer, VertexBufferData},
-    GpuData, RenderError, Texture,
+    GpuData, RenderError, textures::TextureShaderLayout,
 };
 use smallvec::SmallVec;
 use std::{
@@ -33,7 +33,7 @@ pub struct RenderNodeRunner<'a, 'b: 'a> {
 
 impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
     #[inline]
-    pub fn set_texture_data<T: Texture>(&mut self, index: u32, data: &'b TextureData<T>) {
+    pub fn set_texture_data<T: TextureShaderLayout>(&mut self, index: u32, data: &'b TextureData<T>) {
         assert!(
             TypeId::of::<T>() == self.texture_types[(index - self.uniform_group_count) as usize]
         );
@@ -98,11 +98,11 @@ impl<'a> RenderNodeBuilder<'a> {
         self
     }
 
-    pub fn add_texture<T: Texture>(mut self, visibility: wgpu::ShaderStage) -> Self {
+    pub fn add_texture<T: TextureShaderLayout>(mut self) -> Self {
         self.texture_types.push(TypeId::of::<T>());
         self.texture_layout_generators
             .push(Box::new(move |device: &wgpu::Device| {
-                T::get_or_create_layout(device, visibility)
+                T::get_layout(device)
             }));
         self
     }
