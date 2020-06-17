@@ -1,18 +1,20 @@
 pub mod render_node;
 pub mod shader;
+pub mod textures;
 pub mod uniforms;
 pub mod vertex_buffer;
-pub mod textures;
 
 use std::path::PathBuf;
 use thiserror::Error;
 
-pub use vertex_buffer::{VertexBuffer, MutableVertexData, ImmutableVertexData};
 pub use render_node::{RenderNode, RenderNodeBuilder, RenderNodeRunner};
 pub use shader::{FragmentShader, VertexShader};
 pub use smol_renderer_derive::*;
-pub use textures::{simpletexture::SimpleTexture, TextureShaderLayout};
+pub use textures::{
+    simpletexture::SimpleTexture, LoadableTexture, Texture, TextureData, TextureShaderLayout,
+};
 pub use uniforms::{UniformBindGroup, UniformBindGroupBuilder};
+pub use vertex_buffer::{ImmutableVertexData, MutableVertexData, VertexBuffer};
 pub unsafe trait GpuData: 'static + Sized {
     fn as_raw_bytes(&self) -> &[u8] {
         unsafe {

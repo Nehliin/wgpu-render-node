@@ -40,6 +40,6 @@ pub trait LoadableTexture: Sized + TextureShaderLayout {
     ) -> Result<(TextureData<Self>, wgpu::CommandBuffer), RenderError>;
 }
 
-pub trait RenderTargetTexture: Sized {
+pub trait Texture: Sized {
     fn allocate_texture(device: &wgpu::Device) -> TextureData<Self> where Self: TextureShaderLayout;
 }

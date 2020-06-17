@@ -2,8 +2,6 @@ use super::Camera;
 use crate::ModelInfo;
 use nalgebra::{Point3, Vector3};
 use smol_renderer::*;
-use textures::{LoadableTexture, TextureData};
-use vertex_buffer::{VertexBuffer, ImmutableVertexData};
 
 #[repr(C)]
 #[derive(GpuData)]
