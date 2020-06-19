@@ -2,8 +2,6 @@ use super::Camera;
 use crate::ModelInfo;
 use nalgebra::{Point3, Vector3};
 use smol_renderer::*;
-use texture::TextureData;
-use vertex_buffer::{VertexBuffer, ImmutableVertexData};
 
 #[repr(C)]
 #[derive(GpuData)]
@@ -164,10 +162,9 @@ pub fn create_cube(device: &wgpu::Device) -> (Cube, wgpu::CommandBuffer) {
     let index_data = unsafe {
         std::slice::from_raw_parts(index_data.as_ptr() as *const u8, index_data.len() * 4)
     };
-    let (texture, command_buffer) = SimpleTexture::load(
+    let (texture, command_buffer) = SimpleTexture::load_texture(
         &device,
         "examples/basic/cube-diffuse.png",
-        wgpu::ShaderStage::FRAGMENT,
     )
     .unwrap();
     (
