@@ -11,6 +11,9 @@ pub trait TextureShaderLayout: 'static {
 pub struct TextureData<T: TextureShaderLayout> {
     _marker: PhantomData<T>,
     pub bind_group: wgpu::BindGroup,
+    // unclear if default view for multilayered textures
+    // should be separated from invidual layer views
+    // could maybe be separate texture data type?
     pub views: Vec<wgpu::TextureView>,
     pub sampler: wgpu::Sampler,
     pub texture: wgpu::Texture,
@@ -30,6 +33,14 @@ impl<T: TextureShaderLayout> TextureData<T> {
             sampler,
             _marker: PhantomData::default(),
         }
+    }
+    // if the TextureData type would contain information about
+    // if the texture is multilayered or not this could be done in 
+    // a nicer way. Might lead to less control though so I'll begin with this.
+    // Another option is to deref down to the texture itself
+    #[inline]
+    pub fn create_new_view(&self, desc: &wgpu::TextureViewDescriptor) -> wgpu::TextureView {
+        self.texture.create_view(desc)
     }
 }
 
