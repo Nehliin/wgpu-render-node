@@ -112,9 +112,10 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                 .build(&device),
         )
         .add_texture::<SimpleTexture>()
+        .add_default_color_state_desc(swap_chain_desc.format)
         .set_default_rasterization_state()
         .set_default_depth_stencil_state()
-        .build(&device, swap_chain_desc.format)
+        .build(&device)
         .unwrap();
     event_loop.run(move |event, _, control_flow| {
         let _ = (

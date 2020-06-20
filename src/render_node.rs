@@ -4,8 +4,9 @@ use crate::{
 };
 use crate::{
     textures::TextureData,
+    textures::TextureShaderLayout,
     vertex_buffer::{VertexBuffer, VertexBufferData},
-    GpuData, RenderError, textures::TextureShaderLayout,
+    GpuData, RenderError,
 };
 use smallvec::SmallVec;
 use std::{
@@ -33,7 +34,11 @@ pub struct RenderNodeRunner<'a, 'b: 'a> {
 
 impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
     #[inline]
-    pub fn set_texture_data<T: TextureShaderLayout>(&mut self, index: u32, data: &'b TextureData<T>) {
+    pub fn set_texture_data<T: TextureShaderLayout>(
+        &mut self,
+        index: u32,
+        data: &'b TextureData<T>,
+    ) {
         assert!(
             TypeId::of::<T>() == self.texture_types[(index - self.uniform_group_count) as usize]
         );
@@ -75,6 +80,7 @@ pub struct RenderNodeBuilder<'a> {
     shared_uniform_bind_groups: Vec<Arc<UniformBindGroup>>,
     vertex_shader: Option<VertexShader>,
     fragment_shader: Option<FragmentShader>,
+    color_states_desc: Vec<wgpu::ColorStateDescriptor>,
     depth_stencil_desc: Option<wgpu::DepthStencilStateDescriptor>,
     rasterization_state_desc: Option<wgpu::RasterizationStateDescriptor>,
     texture_types: Vec<TypeId>,
@@ -101,9 +107,22 @@ impl<'a> RenderNodeBuilder<'a> {
     pub fn add_texture<T: TextureShaderLayout>(mut self) -> Self {
         self.texture_types.push(TypeId::of::<T>());
         self.texture_layout_generators
-            .push(Box::new(move |device: &wgpu::Device| {
-                T::get_layout(device)
-            }));
+            .push(Box::new(move |device: &wgpu::Device| T::get_layout(device)));
+        self
+    }
+
+    pub fn add_default_color_state_desc(mut self, format: wgpu::TextureFormat) -> Self {
+        self.color_states_desc.push(wgpu::ColorStateDescriptor {
+            format,
+            alpha_blend: wgpu::BlendDescriptor::REPLACE,
+            color_blend: wgpu::BlendDescriptor::REPLACE,
+            write_mask: wgpu::ColorWrite::ALL,
+        });
+        self
+    }
+
+    pub fn add_color_state_desc(mut self, color_state: wgpu::ColorStateDescriptor) -> Self {
+        self.color_states_desc.push(color_state);
         self
     }
 
@@ -151,11 +170,7 @@ impl<'a> RenderNodeBuilder<'a> {
         self
     }
 
-    fn construct_pipeline(
-        &mut self,
-        device: &wgpu::Device,
-        color_format: wgpu::TextureFormat,
-    ) -> wgpu::RenderPipeline {
+    fn construct_pipeline(&mut self, device: &wgpu::Device) -> wgpu::RenderPipeline {
         let texture_layouts = self
             .texture_layout_generators
             .iter()
@@ -188,12 +203,7 @@ impl<'a> RenderNodeBuilder<'a> {
                 .map(FragmentShader::get_descriptor),
             rasterization_state: std::mem::replace(&mut self.rasterization_state_desc, None),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[wgpu::ColorStateDescriptor {
-                format: color_format,
-                alpha_blend: wgpu::BlendDescriptor::REPLACE,
-                color_blend: wgpu::BlendDescriptor::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            }],
+            color_states: &self.color_states_desc,
             depth_stencil_state: std::mem::replace(&mut self.depth_stencil_desc, None),
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint32,
@@ -205,15 +215,11 @@ impl<'a> RenderNodeBuilder<'a> {
         })
     }
 
-    pub fn build(
-        mut self,
-        device: &wgpu::Device,
-        color_format: wgpu::TextureFormat,
-    ) -> Result<RenderNode, RenderError> {
+    pub fn build(mut self, device: &wgpu::Device) -> Result<RenderNode, RenderError> {
         if self.vertex_shader.is_none() {
             Err(RenderError::MissingVertexShader)
         } else {
-            let pipeline = self.construct_pipeline(device, color_format);
+            let pipeline = self.construct_pipeline(device);
             Ok(RenderNode {
                 shared_uniform_bind_groups: self.shared_uniform_bind_groups,
                 local_uniform_bind_groups: self.local_uniform_bind_groups,
@@ -227,18 +233,7 @@ impl<'a> RenderNodeBuilder<'a> {
 
 impl RenderNode {
     pub fn builder<'a>() -> RenderNodeBuilder<'a> {
-        RenderNodeBuilder {
-            vertex_buffer_types: SmallVec::new(),
-            vertex_buffer_descriptors: SmallVec::new(),
-            vertex_shader: None,
-            fragment_shader: None,
-            shared_uniform_bind_groups: Vec::new(),
-            local_uniform_bind_groups: Vec::new(),
-            rasterization_state_desc: None,
-            depth_stencil_desc: None,
-            texture_layout_generators: Vec::new(),
-            texture_types: Vec::new(),
-        }
+        RenderNodeBuilder::default()
     }
 
     #[inline]
@@ -261,6 +256,8 @@ impl RenderNode {
         command_encoder: &'b mut wgpu::CommandEncoder,
         render_pass_descriptor: wgpu::RenderPassDescriptor<'b, '_>,
     ) -> RenderNodeRunner<'a, 'b> {
+        // TODO: more sanity checks can be added here between the given state descriptors
+        // in the builder and the given RenderPassDescriptor
         let mut render_pass = command_encoder.begin_render_pass(&render_pass_descriptor);
         render_pass.set_pipeline(&self.pipeline);
         let local_iter = self.local_uniform_bind_groups.iter();
