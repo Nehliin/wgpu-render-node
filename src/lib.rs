@@ -40,8 +40,8 @@ pub enum RenderError {
     #[error("Couldn't open image")]
     TextureLoadError(#[from] image::ImageError),
 
-    #[error("Issue with shader file")]
-    ShaderFileError(#[from] std::io::Error),
+    #[error("Issue with opening file")]
+    FileReadError(#[from] std::io::Error),
 
     #[error("GpuData can't be zero sized")]
     ZeroSizedGpuData,
