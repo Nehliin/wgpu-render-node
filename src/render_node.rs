@@ -10,7 +10,7 @@ use crate::{
 };
 use smallvec::SmallVec;
 use std::{
-    any::TypeId,
+    any::{type_name, TypeId},
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -40,7 +40,12 @@ impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
         data: &'b TextureData<T>,
     ) {
         assert!(
-            TypeId::of::<T>() == self.texture_types[(index - self.uniform_group_count) as usize]
+            TypeId::of::<T>() == self.texture_types[(index - self.uniform_group_count) as usize],
+            format!(
+                "{}, doesn't match the Texture type on index {}",
+                type_name::<T>(),
+                index
+            )
         );
         self.render_pass
             .set_bind_group(index, &data.bind_group, &[]);
@@ -52,7 +57,14 @@ impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
         index: u32,
         data: &'b impl VertexBufferData<DataType = D>,
     ) {
-        assert!(TypeId::of::<D>() == self.vertex_buffer_types[index as usize]);
+        assert!(
+            TypeId::of::<D>() == self.vertex_buffer_types[index as usize],
+            format!(
+                "{}, doesn't match the VertexBuffer type on index {}",
+                type_name::<D>(),
+                index
+            )
+        );
         self.render_pass
             .set_vertex_buffer(index, data.get_gpu_buffer(), 0, 0);
     }
