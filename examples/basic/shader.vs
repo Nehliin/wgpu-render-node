@@ -4,14 +4,14 @@ layout(location = 0) in vec3 pos;
 layout(location = 1) in vec2 tex_coords;
 layout(location = 0) out vec2 out_tex_coords;
 
-layout(set = 0, binding = 0) 
+layout(set = 1, binding = 0) 
 uniform Camera {
     mat4 view;
     mat4 projection;
     vec3 view_pos;
 };
 
-layout(set = 0, binding = 1) 
+layout(set = 1, binding = 1) 
 uniform ModelInfo {
     mat4 model;
 };

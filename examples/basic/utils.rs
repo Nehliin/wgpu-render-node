@@ -162,11 +162,8 @@ pub fn create_cube(device: &wgpu::Device) -> (Cube, wgpu::CommandBuffer) {
     let index_data = unsafe {
         std::slice::from_raw_parts(index_data.as_ptr() as *const u8, index_data.len() * 4)
     };
-    let (texture, command_buffer) = SimpleTexture::load_texture(
-        &device,
-        "examples/basic/cube-diffuse.png",
-    )
-    .unwrap();
+    let (texture, command_buffer) =
+        SimpleTexture::load_texture(&device, "examples/basic/cube-diffuse.png").unwrap();
     (
         Cube {
             vertices: vertex_data,

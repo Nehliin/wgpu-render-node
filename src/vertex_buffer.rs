@@ -18,7 +18,7 @@ pub struct MutableVertexData<T: GpuData> {
 
 impl<T: VertexBuffer> VertexBufferData for ImmutableVertexData<T> {
     type DataType = T;
-    
+
     fn get_gpu_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
@@ -26,16 +26,20 @@ impl<T: VertexBuffer> VertexBufferData for ImmutableVertexData<T> {
 
 impl<T: VertexBuffer> VertexBufferData for MutableVertexData<T> {
     type DataType = T;
-    
+
     fn get_gpu_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
 }
 
 impl<T: VertexBuffer> MutableVertexData<T> {
-
     #[allow(dead_code)]
-    pub fn update(&self, device: &wgpu::Device, encoder: &mut wgpu::CommandEncoder, buffer_data: &[T]) {
+    pub fn update(
+        &self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        buffer_data: &[T],
+    ) {
         let raw_bytes = buffer_data
             .iter()
             .map(GpuData::as_raw_bytes)
@@ -45,7 +49,7 @@ impl<T: VertexBuffer> MutableVertexData<T> {
 
         let staging_buffer =
             device.create_buffer_with_data(&raw_bytes, wgpu::BufferUsage::COPY_SRC);
-        encoder.copy_buffer_to_buffer(&self.buffer, 0, &staging_buffer, 0, raw_bytes.len() as u64);
+        encoder.copy_buffer_to_buffer(&staging_buffer, 0, &self.buffer, 0, raw_bytes.len() as u64);
     }
 }
 
@@ -80,7 +84,10 @@ pub trait VertexBuffer: GpuData {
             .collect::<Vec<u8>>();
         MutableVertexData {
             _marker: PhantomData::default(),
-            buffer: device.create_buffer_with_data(&raw_bytes, wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST),
+            buffer: device.create_buffer_with_data(
+                &raw_bytes,
+                wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
+            ),
         }
     }
 

@@ -35,7 +35,7 @@ impl<T: TextureShaderLayout> TextureData<T> {
         }
     }
     // if the TextureData type would contain information about
-    // if the texture is multilayered or not this could be done in 
+    // if the texture is multilayered or not this could be done in
     // a nicer way. Might lead to less control though so I'll begin with this.
     // Another option is to deref down to the texture itself
     #[inline]
@@ -52,5 +52,7 @@ pub trait LoadableTexture: Sized + TextureShaderLayout {
 }
 
 pub trait Texture: Sized {
-    fn allocate_texture(device: &wgpu::Device) -> TextureData<Self> where Self: TextureShaderLayout;
+    fn allocate_texture(device: &wgpu::Device) -> TextureData<Self>
+    where
+        Self: TextureShaderLayout;
 }

@@ -29,7 +29,6 @@ pub struct RenderNodeRunner<'a, 'b: 'a> {
     render_pass: wgpu::RenderPass<'a>,
     texture_types: &'b Vec<TypeId>,
     vertex_buffer_types: &'b SmallVec<[TypeId; VERTX_BUFFER_STACK_LIMIT]>,
-    uniform_group_count: u32,
 }
 
 impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
@@ -40,7 +39,7 @@ impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
         data: &'b TextureData<T>,
     ) {
         assert!(
-            TypeId::of::<T>() == self.texture_types[(index - self.uniform_group_count) as usize],
+            TypeId::of::<T>() == self.texture_types[index as usize],
             format!(
                 "{}, doesn't match the Texture type on index {}",
                 type_name::<T>(),
@@ -196,14 +195,16 @@ impl<'a> RenderNodeBuilder<'a> {
         let shared_bind_group_layouts = self
             .shared_uniform_bind_groups
             .iter()
-            .map(|group| group.get_layout())
+            .map(|group| group.get_layout());
+
+        let bind_group_layouts = texture_layouts
+            .chain(shared_bind_group_layouts)
             .chain(local_bind_group_layouts)
-            .chain(texture_layouts)
             .collect::<Vec<&wgpu::BindGroupLayout>>();
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &shared_bind_group_layouts,
+                bind_group_layouts: &bind_group_layouts,
             });
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -279,14 +280,17 @@ impl RenderNode {
             .chain(local_iter)
             .enumerate()
             .for_each(|(i, group)| {
-                render_pass.set_bind_group(i as u32, group.get_bind_group(), &[]);
+                render_pass.set_bind_group(
+                    (self.texture_types.len() + i) as u32,
+                    group.get_bind_group(),
+                    &[],
+                );
             });
 
         RenderNodeRunner {
             render_pass,
             texture_types: &self.texture_types,
             vertex_buffer_types: &self.vertex_buffer_types,
-            uniform_group_count: self.local_uniform_bind_groups.len() as u32,
         }
     }
 }
