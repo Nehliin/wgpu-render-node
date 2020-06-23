@@ -17,12 +17,14 @@ pub use uniforms::{UniformBindGroup, UniformBindGroupBuilder};
 pub use vertex_buffer::{ImmutableVertexData, MutableVertexData, VertexBuffer};
 pub unsafe trait GpuData: 'static + Sized {
     fn as_raw_bytes(&self) -> &[u8] {
-        unsafe {
+        let byte_slice = unsafe {
             std::slice::from_raw_parts(
                 self as *const Self as *const u8,
                 std::mem::size_of::<Self>(),
             )
-        }
+        };
+        debug_assert!(byte_slice.len() == std::mem::size_of::<Self>());
+        byte_slice
     }
 }
 

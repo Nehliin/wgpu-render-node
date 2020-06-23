@@ -1,22 +1,33 @@
 use crate::{GpuData, RenderError};
 use smallvec::SmallVec;
-use std::any::TypeId;
+use std::{any::TypeId, fmt::Display};
 
 const UNIFORM_STACK_LIMIT: usize = 5;
 struct BindingInfo {
     size: usize,
     visibility: wgpu::ShaderStage,
 }
-
+#[derive(Debug)]
 pub struct UniformBindGroup {
     buffers: SmallVec<[(TypeId, wgpu::Buffer); UNIFORM_STACK_LIMIT]>,
     bind_group: Option<wgpu::BindGroup>, //Very ugly
     bind_group_layout: wgpu::BindGroupLayout,
+    label: &'static str,
+}
+
+impl Display for UniformBindGroup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UniformBindGroup({})", &self.label)
+    }
 }
 
 impl UniformBindGroup {
     pub fn builder() -> UniformBindGroupBuilder {
         UniformBindGroupBuilder::new()
+    }
+
+    pub fn with_name(label: &'static str) -> UniformBindGroupBuilder {
+        UniformBindGroupBuilder::with_name(label)
     }
 
     pub(crate) fn get_layout(&self) -> &wgpu::BindGroupLayout {
@@ -57,12 +68,21 @@ impl UniformBindGroup {
 
 pub struct UniformBindGroupBuilder {
     builder_data: SmallVec<[(TypeId, BindingInfo); UNIFORM_STACK_LIMIT]>,
+    label: &'static str,
 }
 
 impl UniformBindGroupBuilder {
     fn new() -> Self {
         UniformBindGroupBuilder {
             builder_data: SmallVec::default(),
+            label: "Unamed UniformBindgroup",
+        }
+    }
+
+    fn with_name(label: &'static str) -> Self {
+        UniformBindGroupBuilder {
+            builder_data: SmallVec::default(),
+            label,
         }
     }
 
@@ -95,7 +115,7 @@ impl UniformBindGroupBuilder {
             SmallVec::default();
         for (i, (id, info)) in self.builder_data.iter().enumerate() {
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(&format!("UniformBindingBuffer: {}", i)),
+                label: Some(&format!("{} Binding buffer: {}", i, self.label)),
                 size: info.size as u64,
                 usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             });
@@ -110,12 +130,13 @@ impl UniformBindGroupBuilder {
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             bindings: &layout_entries,
-            label: Some("UniformBindGroup Layout"),
+            label: Some(&format!("{} Layout", &self.label).to_string()),
         });
         let mut uniform_bind_group = UniformBindGroup {
             buffers,
             bind_group: None,
             bind_group_layout: layout,
+            label: self.label,
         };
         {
             let mut bindings: SmallVec<[wgpu::Binding; UNIFORM_STACK_LIMIT]> = SmallVec::default();
@@ -136,7 +157,7 @@ impl UniformBindGroupBuilder {
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &uniform_bind_group.bind_group_layout,
                 bindings: &bindings,
-                label: Some("UniformBindGroup"),
+                label: Some(self.label),
             });
             uniform_bind_group.bind_group = Some(bind_group)
         }
