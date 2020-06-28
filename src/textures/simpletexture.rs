@@ -11,20 +11,20 @@ impl TextureShaderLayout for SimpleTexture {
         LAYOUT.get_or_init(move || {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 bindings: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: Self::VISIBILITY,
-                        ty: wgpu::BindingType::SampledTexture {
+                    wgpu::BindGroupLayoutEntry::new(
+                        0,
+                        Self::VISIBILITY,
+                        wgpu::BindingType::SampledTexture {
                             dimension: wgpu::TextureViewDimension::D2,
                             component_type: wgpu::TextureComponentType::Float,
                             multisampled: false,
                         },
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: Self::VISIBILITY,
-                        ty: wgpu::BindingType::Sampler { comparison: true },
-                    },
+                    ),
+                    wgpu::BindGroupLayoutEntry::new(
+                        1,
+                        Self::VISIBILITY,
+                        wgpu::BindingType::Sampler { comparison: true },
+                    ),
                 ],
                 label: None,
             })
@@ -52,7 +52,6 @@ impl LoadableTexture for SimpleTexture {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size,
-            array_layer_count: 1,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -69,14 +68,15 @@ impl LoadableTexture for SimpleTexture {
         command_encoder.copy_buffer_to_texture(
             wgpu::BufferCopyView {
                 buffer: &buffer,
-                offset: 0,
-                bytes_per_row: 4 * width,
-                rows_per_image: 0,
+                layout: wgpu::TextureDataLayout {
+                    offset: 0,
+                    bytes_per_row: 4 * width,
+                    rows_per_image: 0,
+                },
             },
             wgpu::TextureCopyView {
                 texture: &texture,
                 mip_level: 0,
-                array_layer: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
             size,
@@ -87,6 +87,7 @@ impl LoadableTexture for SimpleTexture {
 
         let view = texture.create_default_view();
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: None,
             address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::Repeat,
             address_mode_w: wgpu::AddressMode::Repeat,
@@ -95,7 +96,8 @@ impl LoadableTexture for SimpleTexture {
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0, // related to mipmaps
             lod_max_clamp: 100.0,  // related to mipmaps
-            compare: wgpu::CompareFunction::Always,
+            compare: Some(wgpu::CompareFunction::Always),
+            ..Default::default()
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
