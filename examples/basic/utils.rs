@@ -76,7 +76,6 @@ pub fn create_depth_texture(
             height: sc_desc.height,
             depth: 1,
         },
-        array_layer_count: 1,
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,

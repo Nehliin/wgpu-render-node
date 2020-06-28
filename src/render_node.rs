@@ -65,7 +65,7 @@ impl<'a, 'b: 'a> RenderNodeRunner<'a, 'b> {
             )
         );
         self.render_pass
-            .set_vertex_buffer(index, data.get_gpu_buffer(), 0, 0);
+            .set_vertex_buffer(index, data.get_gpu_buffer().slice(..));
     }
 }
 
