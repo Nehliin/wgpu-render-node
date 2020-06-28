@@ -1,24 +1,25 @@
 use crate::RenderError;
-use glsl_to_spirv::ShaderType;
+use shaderc::{Compiler, CompileOptions, ShaderKind};
 use std::fs::File;
 use std::{
     io::Read,
     path::{Path, PathBuf},
 };
+use wgpu::ShaderModuleSource;
 
-fn compile_glsl(path: impl AsRef<Path>, shader_type: ShaderType) -> Result<Vec<u32>, RenderError> {
+fn compile_glsl<'a>(path: impl AsRef<Path>, shader_type: ShaderKind) -> Result<&'a [u32], RenderError> {
     let mut file = File::open(&path)?;
     let mut src = String::new();
+    let mut compiler = Compiler::new().expect("Can't create shader compiler");
+    let mut options = CompileOptions::new().expect("Can't create compiler options");
     file.read_to_string(&mut src)?;
-    let spirv = glsl_to_spirv::compile(&src, shader_type).map_err(|err| {
-        RenderError::ShaderCompileError {
-            compile_error: err,
+    let spirv = compiler
+        .compile_into_spirv(&src, shader_type, "test.glsl", "main", Some(&options))
+        .map_err(|err| RenderError::ShaderCompileError {
+            compile_error: err.to_string(),
             path: PathBuf::from(path.as_ref()),
-        }
-    })?;
-
-    let data = wgpu::read_spirv(spirv)?;
-    Ok(data)
+        })?;
+    Ok(spirv.as_binary())
 }
 
 #[inline(always)]
@@ -35,8 +36,8 @@ pub struct VertexShader {
 
 impl VertexShader {
     pub fn new(device: &wgpu::Device, path: impl AsRef<Path>) -> Result<VertexShader, RenderError> {
-        let data = compile_glsl(path, ShaderType::Vertex)?;
-        let module = device.create_shader_module(&data);
+        let data = compile_glsl(path, ShaderKind::Vertex)?;
+        let module = device.create_shader_module(ShaderModuleSource::SpirV(&data));
         Ok(VertexShader { module })
     }
 
@@ -54,8 +55,8 @@ impl FragmentShader {
         device: &wgpu::Device,
         path: impl AsRef<Path>,
     ) -> Result<FragmentShader, RenderError> {
-        let data = compile_glsl(path.as_ref(), ShaderType::Fragment)?;
-        let module = device.create_shader_module(&data);
+        let data = compile_glsl(path.as_ref(), ShaderKind::Fragment)?;
+        let module = device.create_shader_module(ShaderModuleSource::SpirV(&data));
         Ok(FragmentShader { module })
     }
 
