@@ -1,4 +1,5 @@
 use super::{LoadableTexture, TextureData, TextureShaderLayout};
+use crate::RenderError;
 use image::GenericImage;
 use once_cell::sync::OnceCell;
 use std::marker::PhantomData;
@@ -35,8 +36,9 @@ impl TextureShaderLayout for SimpleTexture {
 impl LoadableTexture for SimpleTexture {
     fn load_texture(
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         path: impl AsRef<std::path::Path>,
-    ) -> Result<(super::TextureData<Self>, wgpu::CommandBuffer), crate::RenderError> {
+    ) -> Result<TextureData<Self>, RenderError> {
         let img = image::open(path)?;
         let img = img.flipv();
 
@@ -58,32 +60,19 @@ impl LoadableTexture for SimpleTexture {
             format: wgpu::TextureFormat::Rgba8UnormSrgb, // handle formats properly
             usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
         });
-        // Generate buffer + Bindbuffer + fill it with data
-        let buffer = device.create_buffer_with_data(&rgba.to_vec(), wgpu::BufferUsage::COPY_SRC);
 
-        let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Texture load encoder"),
-        });
-        // Encode a command that sends the data to the gpu so it can be bound to the texture in the shaders
-        command_encoder.copy_buffer_to_texture(
-            wgpu::BufferCopyView {
-                buffer: &buffer,
-                layout: wgpu::TextureDataLayout {
-                    offset: 0,
-                    bytes_per_row: 4 * width,
-                    rows_per_image: 0,
-                },
-            },
-            wgpu::TextureCopyView {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-            },
-            size,
-        );
-        // final buffer of the commands needed to send the texture to the GPU
-        // So it can be used in the shaders
-        let command_buffer = command_encoder.finish();
+        let texutre_copy_view = wgpu::TextureCopyView {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+        };
+        let texture_data_layout = wgpu::TextureDataLayout {
+            offset: 0,
+            bytes_per_row: 4 * width,
+            rows_per_image: 0,
+        };
+
+        queue.write_texture(texutre_copy_view, &rgba.to_vec(), texture_data_layout, size);
 
         let view = texture.create_default_view();
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -121,6 +110,6 @@ impl LoadableTexture for SimpleTexture {
             texture,
             _marker: PhantomData::default(),
         };
-        Ok((texture_data, command_buffer))
+        Ok(texture_data)
     }
 }

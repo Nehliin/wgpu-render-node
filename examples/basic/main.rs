@@ -44,7 +44,6 @@ impl Camera {
 }
 
 async fn run_example(event_loop: EventLoop<()>, window: Window) {
-
     let instace = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
 
     let (size, surface) = unsafe {
@@ -90,8 +89,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
     let depth_texture_view = depth_texture.create_default_view();
     let mut swap_chain = device.create_swap_chain(&surface, &swap_chain_desc);
 
-    let (cube, command_buffer) = create_cube(&device);
-    queue.submit(vec![command_buffer]);
+    let cube = create_cube(&device, &queue);
 
     let camera = Camera::new(
         Point3::new(0.0, 0.0, 0.0),
