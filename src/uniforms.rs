@@ -7,7 +7,6 @@ struct BindingInfo {
     size: usize,
     visibility: wgpu::ShaderStage,
 }
-#[derive(Debug)]
 pub struct UniformBindGroup {
     buffers: SmallVec<[(TypeId, wgpu::Buffer); UNIFORM_STACK_LIMIT]>,
     bind_group: Option<wgpu::BindGroup>, //Very ugly
@@ -34,7 +33,7 @@ impl UniformBindGroup {
         &self.bind_group_layout
     }
 
-    pub(crate) fn get_bind_group(&self) -> &wgpu::BindGroup {
+    pub fn get_bind_group(&self) -> &wgpu::BindGroup {
         &self
             .bind_group
             .as_ref()
@@ -117,15 +116,19 @@ impl UniformBindGroupBuilder {
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(&format!("{} Binding buffer: {}", i, self.label)),
                 size: info.size as u64,
+                mapped_at_creation: false,
                 usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             });
 
             buffers.push((*id, buffer));
-            layout_entries.push(wgpu::BindGroupLayoutEntry {
-                binding: i as u32,
-                visibility: info.visibility,
-                ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-            })
+            layout_entries.push(wgpu::BindGroupLayoutEntry::new(
+                i as u32,
+                info.visibility,
+                wgpu::BindingType::UniformBuffer {
+                    dynamic: false,
+                    min_binding_size: wgpu::BufferSize::new(info.size as u64),
+                },
+            ))
         }
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -140,17 +143,14 @@ impl UniformBindGroupBuilder {
         };
         {
             let mut bindings: SmallVec<[wgpu::Binding; UNIFORM_STACK_LIMIT]> = SmallVec::default();
-            self.builder_data
+            uniform_bind_group
+                .buffers
                 .iter()
                 .enumerate()
-                .zip(uniform_bind_group.buffers.iter())
-                .for_each(|((i, (_, info)), (_, buffer))| {
+                .for_each(|(i, (_, buffer))| {
                     bindings.push(wgpu::Binding {
                         binding: i as u32,
-                        resource: wgpu::BindingResource::Buffer {
-                            buffer: &buffer,
-                            range: 0..info.size as wgpu::BufferAddress,
-                        },
+                        resource: wgpu::BindingResource::Buffer(buffer.slice(..)),
                     });
                 });
 
@@ -172,23 +172,31 @@ mod tests {
 
     fn create_test_env() -> (wgpu::Device, wgpu::Queue) {
         futures::executor::block_on(async {
-            let adapter = wgpu::Adapter::request(
-                &wgpu::RequestAdapterOptions {
-                    power_preference: wgpu::PowerPreference::Default,
-                    compatible_surface: None,
-                },
-                wgpu::BackendBit::PRIMARY,
-            )
-            .await
-            .unwrap();
-            adapter
-                .request_device(&wgpu::DeviceDescriptor {
-                    extensions: wgpu::Extensions {
-                        anisotropic_filtering: false,
+            let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+
+            let adapter = instance
+                .request_adapter(
+                    &wgpu::RequestAdapterOptions {
+                        power_preference: wgpu::PowerPreference::Default,
+                        compatible_surface: None,
                     },
-                    limits: Default::default(),
-                })
+                    wgpu::UnsafeFeatures::disallow(),
+                )
                 .await
+                .unwrap();
+
+            let adapter_features = adapter.features();
+            adapter
+                .request_device(
+                    &wgpu::DeviceDescriptor {
+                        features: adapter_features,
+                        shader_validation: false,
+                        limits: Default::default(),
+                    },
+                    None,
+                )
+                .await
+                .unwrap()
         })
     }
     #[repr(C)]

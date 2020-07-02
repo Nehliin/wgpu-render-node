@@ -76,7 +76,6 @@ pub fn create_depth_texture(
             height: sc_desc.height,
             depth: 1,
         },
-        array_layer_count: 1,
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -115,7 +114,7 @@ pub struct Cube {
     pub index_count: u32,
 }
 
-pub fn create_cube(device: &wgpu::Device) -> (Cube, wgpu::CommandBuffer) {
+pub fn create_cube(device: &wgpu::Device, queue: &wgpu::Queue) -> Cube {
     let vertex_data = [
         // top (0, 0, 1)
         vertex([-1, -1, 1], [0, 0]),
@@ -162,15 +161,12 @@ pub fn create_cube(device: &wgpu::Device) -> (Cube, wgpu::CommandBuffer) {
     let index_data = unsafe {
         std::slice::from_raw_parts(index_data.as_ptr() as *const u8, index_data.len() * 4)
     };
-    let (texture, command_buffer) =
-        SimpleTexture::load_texture(&device, "examples/basic/cube-diffuse.png").unwrap();
-    (
-        Cube {
-            vertices: vertex_data,
-            index_buf: device.create_buffer_with_data(index_data, wgpu::BufferUsage::INDEX),
-            index_count,
-            texture,
-        },
-        command_buffer,
-    )
+    let texture =
+        SimpleTexture::load_texture(&device, &queue, "examples/basic/cube-diffuse.png").unwrap();
+    Cube {
+        vertices: vertex_data,
+        index_buf: device.create_buffer_with_data(index_data, wgpu::BufferUsage::INDEX),
+        index_count,
+        texture,
+    }
 }

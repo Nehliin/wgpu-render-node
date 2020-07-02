@@ -44,27 +44,38 @@ impl Camera {
 }
 
 async fn run_example(event_loop: EventLoop<()>, window: Window) {
-    let size = window.inner_size();
+    let instace = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
 
-    let surface = wgpu::Surface::create(&window);
-    let adapter = wgpu::Adapter::request(
-        &wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: Some(&surface),
-        },
-        wgpu::BackendBit::PRIMARY,
-    )
-    .await
-    .unwrap();
+    let (size, surface) = unsafe {
+        let size = window.inner_size();
+        let surface = instace.create_surface(&window);
+        (size, surface)
+    };
 
-    let (device, queue) = adapter
-        .request_device(&wgpu::DeviceDescriptor {
-            extensions: wgpu::Extensions {
-                anisotropic_filtering: false,
+    let unsafe_features = wgpu::UnsafeFeatures::disallow();
+
+    let adapter = instace
+        .request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
             },
-            limits: Default::default(),
-        })
-        .await;
+            unsafe_features,
+        )
+        .await
+        .unwrap();
+    let features = adapter.features();
+    let (device, queue) = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                features,
+                shader_validation: true,
+                limits: Default::default(),
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
     let swap_chain_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
@@ -78,8 +89,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
     let depth_texture_view = depth_texture.create_default_view();
     let mut swap_chain = device.create_swap_chain(&surface, &swap_chain_desc);
 
-    let (cube, command_buffer) = create_cube(&device);
-    queue.submit(&[command_buffer]);
+    let cube = create_cube(&device, &queue);
 
     let camera = Camera::new(
         Point3::new(0.0, 0.0, 0.0),
@@ -147,7 +157,7 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                 _ => {}
             },
             event::Event::RedrawRequested(_) => {
-                let frame = swap_chain.get_next_texture().unwrap();
+                let frame = swap_chain.get_next_frame().unwrap().output;
                 let mut encoder =
                     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
                 render_node
@@ -172,34 +182,34 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
                         color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                             attachment: &frame.view,
                             resolve_target: None,
-                            load_op: wgpu::LoadOp::Clear,
-                            store_op: wgpu::StoreOp::Store,
-                            clear_color: wgpu::Color {
-                                r: 0.1,
-                                g: 0.7,
-                                b: 0.3,
-                                a: 1.0,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: 0.1,
+                                    g: 0.7,
+                                    b: 0.3,
+                                    a: 1.0,
+                                }),
+                                store: true,
                             },
                         }],
                         depth_stencil_attachment: Some(
                             wgpu::RenderPassDepthStencilAttachmentDescriptor {
                                 attachment: &depth_texture_view,
-                                depth_load_op: wgpu::LoadOp::Clear,
-                                depth_store_op: wgpu::StoreOp::Store,
-                                clear_depth: 1.0,
-                                stencil_load_op: wgpu::LoadOp::Clear,
-                                stencil_store_op: wgpu::StoreOp::Store,
-                                clear_stencil: 0,
+                                depth_ops: Some(wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(1.0),
+                                    store: true,
+                                }),
+                                stencil_ops: None,
                             },
                         ),
                     },
                 );
                 runner.set_vertex_buffer_data(0, &cube.vertices);
-                runner.set_index_buffer(&cube.index_buf, 0, 0);
+                runner.set_index_buffer(cube.index_buf.slice(..));
                 runner.set_texture_data(0, &cube.texture);
                 runner.draw_indexed(0..cube.index_count, 0, 0..1);
                 drop(runner);
-                queue.submit(&[encoder.finish()]);
+                queue.submit(vec![encoder.finish()]);
             }
             _ => {}
         }

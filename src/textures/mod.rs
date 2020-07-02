@@ -47,8 +47,9 @@ impl<T: TextureShaderLayout> TextureData<T> {
 pub trait LoadableTexture: Sized + TextureShaderLayout {
     fn load_texture(
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         path: impl AsRef<Path>,
-    ) -> Result<(TextureData<Self>, wgpu::CommandBuffer), RenderError>;
+    ) -> Result<TextureData<Self>, RenderError>;
 }
 
 pub trait Texture: Sized {
