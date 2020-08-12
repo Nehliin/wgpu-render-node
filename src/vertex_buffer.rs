@@ -1,9 +1,11 @@
 use crate::GpuData;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::RangeBounds};
+use wgpu::BufferAddress;
 
 pub trait VertexBufferData {
     type DataType: VertexBuffer;
     fn get_gpu_buffer(&self) -> &wgpu::Buffer;
+    fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> wgpu::BufferSlice;
 }
 
 pub struct ImmutableVertexData<T: GpuData> {
@@ -22,6 +24,10 @@ impl<T: VertexBuffer> VertexBufferData for ImmutableVertexData<T> {
     fn get_gpu_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
+
+    fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> wgpu::BufferSlice {
+        self.buffer.slice(bounds)
+    }
 }
 
 impl<T: VertexBuffer> VertexBufferData for MutableVertexData<T> {
@@ -29,6 +35,10 @@ impl<T: VertexBuffer> VertexBufferData for MutableVertexData<T> {
 
     fn get_gpu_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
+    }
+
+    fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> wgpu::BufferSlice {
+        self.buffer.slice(bounds)
     }
 }
 
