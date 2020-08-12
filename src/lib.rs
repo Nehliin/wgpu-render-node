@@ -14,7 +14,7 @@ pub use textures::{
     simpletexture::SimpleTexture, LoadableTexture, Texture, TextureData, TextureShaderLayout,
 };
 pub use uniforms::{UniformBindGroup, UniformBindGroupBuilder};
-pub use vertex_buffer::{ImmutableVertexData, MutableVertexData, VertexBuffer};
+pub use vertex_buffer::{ImmutableVertexData, MutableVertexData, VertexBuffer, VertexBufferData};
 pub unsafe trait GpuData: 'static + Sized {
     fn as_raw_bytes(&self) -> &[u8] {
         unsafe {
