@@ -180,7 +180,6 @@ mod tests {
                         power_preference: wgpu::PowerPreference::Default,
                         compatible_surface: None,
                     },
-                    wgpu::UnsafeFeatures::disallow(),
                 )
                 .await
                 .unwrap();
