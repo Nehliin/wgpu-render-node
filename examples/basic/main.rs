@@ -52,15 +52,12 @@ async fn run_example(event_loop: EventLoop<()>, window: Window) {
         (size, surface)
     };
 
-    let unsafe_features = wgpu::UnsafeFeatures::disallow();
-
     let adapter = instace
         .request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
             },
-            unsafe_features,
         )
         .await
         .unwrap();
