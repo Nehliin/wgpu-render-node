@@ -5,8 +5,8 @@ use once_cell::sync::OnceCell;
 use std::marker::PhantomData;
 pub struct SimpleTexture;
 
+
 impl TextureShaderLayout for SimpleTexture {
-    const VISIBILITY: wgpu::ShaderStage = wgpu::ShaderStage::FRAGMENT;
     fn get_layout(device: &wgpu::Device) -> &'static wgpu::BindGroupLayout {
         static LAYOUT: OnceCell<wgpu::BindGroupLayout> = OnceCell::new();
         LAYOUT.get_or_init(move || {
@@ -14,7 +14,7 @@ impl TextureShaderLayout for SimpleTexture {
                 bindings: &[
                     wgpu::BindGroupLayoutEntry::new(
                         0,
-                        Self::VISIBILITY,
+                        wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                         wgpu::BindingType::SampledTexture {
                             dimension: wgpu::TextureViewDimension::D2,
                             component_type: wgpu::TextureComponentType::Float,
@@ -23,7 +23,7 @@ impl TextureShaderLayout for SimpleTexture {
                     ),
                     wgpu::BindGroupLayoutEntry::new(
                         1,
-                        Self::VISIBILITY,
+                        wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                         wgpu::BindingType::Sampler { comparison: true },
                     ),
                 ],

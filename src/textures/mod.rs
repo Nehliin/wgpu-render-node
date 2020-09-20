@@ -4,7 +4,6 @@ use std::{marker::PhantomData, path::Path};
 pub mod simpletexture;
 
 pub trait TextureShaderLayout: 'static {
-    const VISIBILITY: wgpu::ShaderStage;
     fn get_layout(device: &wgpu::Device) -> &'static wgpu::BindGroupLayout;
 }
 
